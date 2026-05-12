@@ -28,3 +28,18 @@ This schema defines:
 - Reliable app payload messages
 - Heartbeat / disconnect control messages
 - Required metadata for interoperability, versioning, and security signaling
+
+## Runtime Implementations
+
+The repository now includes reference runtime code for three environments:
+
+- iOS: `ios/Sources/Peer2Nodes/Peer2Nodes.swift`
+- Android/JVM: `android/src/main/java/com/fromscratchstudio/peer2nodes/Peer2Nodes.kt`
+- JavaScript runtimes (desktop/server/web tooling): `javascript/peer2nodes.js`
+
+Each runtime includes:
+
+- The shared Peer2Nodes message model
+- Session lifecycle handling for `HELLO`, `HELLO_ACK`, `DATA`, `HEARTBEAT`, and `GOODBYE`
+- A transport abstraction that can be backed by WebRTC, local wireless discovery, or another direct transport
+- A loopback/in-memory transport implementation for integration and smoke testing
