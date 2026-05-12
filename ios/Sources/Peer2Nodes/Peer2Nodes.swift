@@ -369,7 +369,7 @@ public final class PeerNodeClient {
         var state = sessions[sessionId] ?? SessionState(
             targetNodeId: nil,
             lastReceivedAt: dateProvider(),
-            nextSequence: 0,
+            nextSequence: 1,
             connected: false
         )
         let nextValue = state.nextSequence

@@ -268,7 +268,7 @@ class PeerNodeClient(
 
     private fun nextSequence(sessionId: String): Int {
         val state = sessions.getOrPut(sessionId) {
-            SessionState(targetNodeId = null, lastReceivedAt = now(), nextSequence = 0, connected = false)
+            SessionState(targetNodeId = null, lastReceivedAt = now(), nextSequence = 1, connected = false)
         }
         val sequence = state.nextSequence
         state.nextSequence += 1

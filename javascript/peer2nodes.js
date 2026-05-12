@@ -268,7 +268,7 @@ class PeerNodeClient {
     const state = this.sessions.get(sessionId) ?? {
       targetNodeId: null,
       lastReceivedAt: this.now(),
-      nextSequence: 0,
+      nextSequence: 1,
       connected: false
     };
     const sequence = state.nextSequence;
