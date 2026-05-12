@@ -65,7 +65,7 @@
       "items": {
         "type": "string",
         "enum": [
-          "webrtc-datachannel",
+          "webrtc-data-channel",
           "wifi-direct",
           "wifi-aware",
           "ble-gatt",
@@ -118,7 +118,7 @@
           ]
         },
         "body": {
-          "description": "Payload body."
+          "description": "Payload body content. Shape depends on `encoding` (for example object for json, string for utf8/base64, or binary-compatible representation)."
         }
       }
     },
