@@ -19,7 +19,7 @@ Provide a universal, app-embeddable peer communication layer that can connect on
 
 The repository now includes a universal JSON Schema for peer messages:
 
-- `/home/runner/work/Peer2Nodes/Peer2Nodes/protocol/peer2nodes-message.schema.json`
+- `protocol/peer2nodes-message.schema.json`
 
 This schema defines:
 
