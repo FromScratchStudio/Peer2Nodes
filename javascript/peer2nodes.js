@@ -83,7 +83,7 @@ class PeerNodeClient {
       throw new Error('transport is required');
     }
 
-    this.nodeId = nodeId.toLowerCase();
+    this.nodeId = nodeId;
     this.protocolVersion = protocolVersion;
     this.capabilities = capabilities;
     this.transport = transport;
@@ -109,7 +109,7 @@ class PeerNodeClient {
   }
 
   async openSession(targetNodeId = null) {
-    const sessionId = crypto.randomUUID().toLowerCase();
+    const sessionId = crypto.randomUUID();
     this.sessions.set(sessionId, {
       targetNodeId,
       lastReceivedAt: this.now(),

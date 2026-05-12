@@ -118,7 +118,7 @@ class LoopbackPeerTransport : PeerTransport {
 }
 
 class PeerNodeClient(
-    val nodeId: String = UUID.randomUUID().toString().lowercase(),
+    val nodeId: String = UUID.randomUUID().toString(),
     private val protocolVersion: String = "1.0.0",
     private val capabilities: List<PeerCapability>,
     private val transport: PeerTransport,
@@ -151,7 +151,7 @@ class PeerNodeClient(
     }
 
     fun openSession(targetNodeId: String? = null): String {
-        val sessionId = UUID.randomUUID().toString().lowercase()
+        val sessionId = UUID.randomUUID().toString()
         sessions[sessionId] = SessionState(targetNodeId, now(), 1, false)
         transport.send(
             buildEnvelope(

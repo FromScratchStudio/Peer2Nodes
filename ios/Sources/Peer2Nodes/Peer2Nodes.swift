@@ -186,7 +186,7 @@ public final class PeerNodeClient {
     private var sessions: [String: SessionState] = [:]
 
     public init(
-        nodeId: String = UUID().uuidString.lowercased(),
+        nodeId: String = UUID().uuidString,
         protocolVersion: String = "1.0.0",
         capabilities: [PeerCapability],
         transport: PeerTransport,
@@ -213,7 +213,7 @@ public final class PeerNodeClient {
 
     @discardableResult
     public func openSession(targetNodeId: String? = nil) throws -> String {
-        let sessionId = UUID().uuidString.lowercased()
+        let sessionId = UUID().uuidString
         sessions[sessionId] = SessionState(
             targetNodeId: targetNodeId,
             lastReceivedAt: dateProvider(),
@@ -309,7 +309,20 @@ public final class PeerNodeClient {
                         capabilities: capabilities
                     )
                 )
-            } catch {}
+            } catch {
+                onFailure?(
+                    buildEnvelope(
+                        messageType: .error,
+                        sessionId: envelope.sessionId,
+                        targetNodeId: envelope.sourceNodeId,
+                        error: PeerFailure(
+                            code: "transport_send_failed",
+                            message: error.localizedDescription,
+                            retryable: true
+                        )
+                    )
+                )
+            }
         case .helloAck:
             sessions[envelope.sessionId]?.connected = true
             onSessionOpened?(envelope.sessionId, envelope.sourceNodeId)
