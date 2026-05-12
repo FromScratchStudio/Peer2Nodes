@@ -45,6 +45,26 @@ const EncryptionMode = Object.freeze({
   TLS: 'tls'
 });
 
+function stripNullish(value) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(stripNullish);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, nestedValue]) => nestedValue !== null && nestedValue !== undefined)
+        .map(([key, nestedValue]) => [key, stripNullish(nestedValue)])
+    );
+  }
+
+  return value;
+}
+
 class MemoryPeerTransport {
   #handler = null;
   #remote = null;
@@ -163,12 +183,7 @@ class PeerNodeClient {
   }
 
   encode(envelope) {
-    return JSON.stringify({
-      ...envelope,
-      timestamp: envelope.timestamp instanceof Date
-        ? envelope.timestamp.toISOString()
-        : envelope.timestamp
-    });
+    return JSON.stringify(stripNullish(envelope));
   }
 
   decode(json) {

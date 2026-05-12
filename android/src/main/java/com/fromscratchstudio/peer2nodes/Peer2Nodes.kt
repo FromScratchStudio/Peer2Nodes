@@ -3,16 +3,23 @@ package com.fromscratchstudio.peer2nodes
 import java.time.Instant
 import java.util.UUID
 
-enum class PeerMessageType {
-    HELLO,
-    HELLO_ACK,
-    OFFER,
-    ANSWER,
-    CANDIDATE,
-    DATA,
-    HEARTBEAT,
-    GOODBYE,
-    ERROR
+enum class PeerMessageType(val wireValue: String) {
+    HELLO("HELLO"),
+    HELLO_ACK("HELLO_ACK"),
+    OFFER("OFFER"),
+    ANSWER("ANSWER"),
+    CANDIDATE("CANDIDATE"),
+    DATA("DATA"),
+    HEARTBEAT("HEARTBEAT"),
+    GOODBYE("GOODBYE"),
+    ERROR("ERROR");
+
+    companion object {
+        fun fromWireValue(value: String): PeerMessageType {
+            return entries.firstOrNull { it.wireValue == value }
+                ?: throw IllegalArgumentException("Unsupported messageType: $value")
+        }
+    }
 }
 
 enum class PeerCapability(val wireValue: String) {
@@ -22,53 +29,145 @@ enum class PeerCapability(val wireValue: String) {
     BLE_GATT("ble-gatt"),
     END_TO_END_ENCRYPTION("end-to-end-encryption"),
     FILE_TRANSFER("file-transfer"),
-    STREAMING("streaming")
+    STREAMING("streaming");
+
+    companion object {
+        fun fromWireValue(value: String): PeerCapability {
+            return entries.firstOrNull { it.wireValue == value }
+                ?: throw IllegalArgumentException("Unsupported capability: $value")
+        }
+    }
 }
 
 enum class PeerTransportKind(val wireValue: String) {
     WEBRTC("webrtc"),
     WIFI_DIRECT("wifi-direct"),
     WIFI_AWARE("wifi-aware"),
-    BLE("ble")
+    BLE("ble");
+
+    companion object {
+        fun fromWireValue(value: String): PeerTransportKind {
+            return entries.firstOrNull { it.wireValue == value }
+                ?: throw IllegalArgumentException("Unsupported transport: $value")
+        }
+    }
 }
 
-enum class PeerPayloadEncoding {
-    JSON,
-    UTF8,
-    BASE64,
-    BINARY
+enum class PeerPayloadEncoding(val wireValue: String) {
+    JSON("json"),
+    UTF8("utf8"),
+    BASE64("base64"),
+    BINARY("binary");
+
+    companion object {
+        fun fromWireValue(value: String): PeerPayloadEncoding {
+            return entries.firstOrNull { it.wireValue == value }
+                ?: throw IllegalArgumentException("Unsupported payload encoding: $value")
+        }
+    }
 }
 
 enum class PeerEncryptionMode(val wireValue: String) {
     NONE("none"),
     DTLS("dtls"),
     NOISE_XK("noise-xk"),
-    TLS("tls")
+    TLS("tls");
+
+    companion object {
+        fun fromWireValue(value: String): PeerEncryptionMode {
+            return entries.firstOrNull { it.wireValue == value }
+                ?: throw IllegalArgumentException("Unsupported encryption mode: $value")
+        }
+    }
 }
 
 data class PeerNegotiation(
     val transport: PeerTransportKind,
     val sdp: String? = null,
     val candidate: String? = null
-)
+) {
+    fun toProtocolMap(): Map<String, Any> = buildMap {
+        put("transport", transport.wireValue)
+        sdp?.let { put("sdp", it) }
+        candidate?.let { put("candidate", it) }
+    }
+
+    companion object {
+        fun fromProtocolMap(map: Map<String, Any?>): PeerNegotiation {
+            return PeerNegotiation(
+                transport = PeerTransportKind.fromWireValue(map.requireString("transport")),
+                sdp = map.string("sdp"),
+                candidate = map.string("candidate")
+            )
+        }
+    }
+}
 
 data class PeerPayload(
     val contentType: String,
     val encoding: PeerPayloadEncoding,
     val body: String
-)
+) {
+    fun toProtocolMap(): Map<String, Any> = mapOf(
+        "contentType" to contentType,
+        "encoding" to encoding.wireValue,
+        "body" to body
+    )
+
+    companion object {
+        fun fromProtocolMap(map: Map<String, Any?>): PeerPayload {
+            return PeerPayload(
+                contentType = map.requireString("contentType"),
+                encoding = PeerPayloadEncoding.fromWireValue(map.requireString("encoding")),
+                body = map.requireString("body")
+            )
+        }
+    }
+}
 
 data class PeerSecurity(
     val encryption: PeerEncryptionMode,
     val signature: String? = null,
     val keyId: String? = null
-)
+) {
+    fun toProtocolMap(): Map<String, Any> = buildMap {
+        put("encryption", encryption.wireValue)
+        signature?.let { put("signature", it) }
+        keyId?.let { put("keyId", it) }
+    }
+
+    companion object {
+        fun fromProtocolMap(map: Map<String, Any?>): PeerSecurity {
+            return PeerSecurity(
+                encryption = PeerEncryptionMode.fromWireValue(map.requireString("encryption")),
+                signature = map.string("signature"),
+                keyId = map.string("keyId")
+            )
+        }
+    }
+}
 
 data class PeerFailure(
     val code: String,
     val message: String,
     val retryable: Boolean = false
-)
+) {
+    fun toProtocolMap(): Map<String, Any> = mapOf(
+        "code" to code,
+        "message" to message,
+        "retryable" to retryable
+    )
+
+    companion object {
+        fun fromProtocolMap(map: Map<String, Any?>): PeerFailure {
+            return PeerFailure(
+                code = map.requireString("code"),
+                message = map.requireString("message"),
+                retryable = map.boolean("retryable") ?: false
+            )
+        }
+    }
+}
 
 data class PeerEnvelope(
     val protocolVersion: String,
@@ -83,7 +182,72 @@ data class PeerEnvelope(
     val payload: PeerPayload? = null,
     val security: PeerSecurity? = null,
     val error: PeerFailure? = null
-)
+) {
+    fun toProtocolMap(): Map<String, Any> = buildMap {
+        put("protocolVersion", protocolVersion)
+        put("messageType", messageType.wireValue)
+        put("sessionId", sessionId)
+        put("sourceNodeId", sourceNodeId)
+        targetNodeId?.let { put("targetNodeId", it) }
+        put("timestamp", timestamp.toString())
+        put("sequence", sequence)
+        capabilities?.let { put("capabilities", it.map(PeerCapability::wireValue)) }
+        negotiation?.let { put("negotiation", it.toProtocolMap()) }
+        payload?.let { put("payload", it.toProtocolMap()) }
+        security?.let { put("security", it.toProtocolMap()) }
+        error?.let { put("error", it.toProtocolMap()) }
+    }
+
+    companion object {
+        fun fromProtocolMap(map: Map<String, Any?>): PeerEnvelope {
+            return PeerEnvelope(
+                protocolVersion = map.requireString("protocolVersion"),
+                messageType = PeerMessageType.fromWireValue(map.requireString("messageType")),
+                sessionId = map.requireString("sessionId"),
+                sourceNodeId = map.requireString("sourceNodeId"),
+                targetNodeId = map.string("targetNodeId"),
+                timestamp = Instant.parse(map.requireString("timestamp")),
+                sequence = map.requireInt("sequence"),
+                capabilities = map.stringList("capabilities")?.map(PeerCapability::fromWireValue),
+                negotiation = map.mapValue("negotiation")?.let(PeerNegotiation::fromProtocolMap),
+                payload = map.mapValue("payload")?.let(PeerPayload::fromProtocolMap),
+                security = map.mapValue("security")?.let(PeerSecurity::fromProtocolMap),
+                error = map.mapValue("error")?.let(PeerFailure::fromProtocolMap)
+            )
+        }
+    }
+}
+
+private fun Map<String, Any?>.string(key: String): String? = this[key] as? String
+
+private fun Map<String, Any?>.requireString(key: String): String {
+    return string(key) ?: throw IllegalArgumentException("Missing or invalid string field: $key")
+}
+
+private fun Map<String, Any?>.requireInt(key: String): Int {
+    val value = this[key]
+    return when (value) {
+        is Int -> value
+        is Long -> value.toInt()
+        is Number -> value.toInt()
+        is String -> value.toIntOrNull()
+        else -> null
+    } ?: throw IllegalArgumentException("Missing or invalid int field: $key")
+}
+
+private fun Map<String, Any?>.boolean(key: String): Boolean? = this[key] as? Boolean
+
+@Suppress("UNCHECKED_CAST")
+private fun Map<String, Any?>.mapValue(key: String): Map<String, Any?>? {
+    return this[key] as? Map<String, Any?>
+}
+
+private fun Map<String, Any?>.stringList(key: String): List<String>? {
+    val values = this[key] as? List<*> ?: return null
+    return values.map {
+        it as? String ?: throw IllegalArgumentException("Invalid string value in list field: $key")
+    }
+}
 
 fun interface PeerTransportHandler {
     fun onEnvelope(envelope: PeerEnvelope)
