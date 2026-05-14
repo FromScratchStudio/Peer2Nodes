@@ -455,10 +455,12 @@ async function nfcReadAndConnect() {
 }
 
 function bindAsyncClick(selector, action, errorMessagePrefix) {
-  $(selector).addEventListener('click', () => {
-    Promise.resolve()
-      .then(() => action())
-      .catch((err) => appendLog('system', '#f85149', `${errorMessagePrefix} (${selector})`, err.message));
+  $(selector).addEventListener('click', async () => {
+    try {
+      await action();
+    } catch (err) {
+      appendLog('system', '#f85149', `${errorMessagePrefix} (${selector})`, err.message);
+    }
   });
 }
 

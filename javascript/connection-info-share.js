@@ -97,7 +97,7 @@ function normalizeConnectionInfo(parsed) {
     nodeId: parsed.nodeId,
     displayName,
     capabilities,
-    createdAt: normalizeCreatedAt(parsed.createdAt)
+    createdAt: normalizeCreatedAt(parsed.createdAt),
   };
 }
 
