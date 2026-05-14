@@ -66,10 +66,9 @@ function refreshSelects() {
     .map(i => `<option value="${i.id}">${escHtml(i.name)}</option>`)
     .join('');
 
-  const connectSelects = ['#sel-initiator', '#sel-responder'];
-  connectSelects.forEach((selector) => {
-    const sel = $(selector);
-    if (!sel) return;
+  $$('.inst-select')
+    .filter((sel) => sel.id !== 'sel-share-instance')
+    .forEach((sel) => {
     const prev = sel.value;
     sel.innerHTML = '<option value="">— select —</option>' + opts;
     if (prev && instances.has(prev)) sel.value = prev;
@@ -314,10 +313,12 @@ function renderQrPreview(payload) {
   const img = $('#qr-preview');
   if (!payload) {
     img.removeAttribute('src');
+    img.alt = 'No QR code generated';
     return;
   }
   const encoded = encodeURIComponent(payload);
   img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
+  img.alt = 'Connection QR code';
 }
 
 function generateSharePayload() {
@@ -357,7 +358,7 @@ async function nativeShareUri() {
     appendLog('system', '#d29922', 'native share API unavailable');
     return;
   }
-  await navigator.share({ title: 'Peer2Nodes connection', text: value, url: value });
+  await navigator.share({ title: 'Peer2Nodes connection', text: value });
   appendLog('system', '#58a6ff', 'share sheet opened');
 }
 
@@ -429,7 +430,7 @@ async function nfcReadAndConnect() {
     ndef.onreading = async (event) => {
       for (const record of event.message.records) {
         if (record.recordType !== 'url' && record.recordType !== 'text') continue;
-        const data = new TextDecoder(record.encoding ?? 'utf-8').decode(record.data);
+        const data = new TextDecoder('utf-8').decode(record.data);
         $('#share-uri').value = data;
         renderQrPreview(data);
         appendLog('system', '#58a6ff', 'NFC tag read');
@@ -445,7 +446,7 @@ async function nfcReadAndConnect() {
 
 function bindAsyncClick(selector, action, errorEvent) {
   $(selector).addEventListener('click', () => {
-    Promise.resolve(action()).catch((err) => appendLog('system', '#f85149', errorEvent, err.message));
+    Promise.resolve(action()).catch((err) => appendLog('system', '#f85149', `${errorEvent} (${selector})`, err.message));
   });
 }
 
