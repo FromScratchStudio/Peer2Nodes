@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fromscratchstudio.github.io/peer2nodes/schemas/peer2nodes-message.schema.json",
+  "title": "Peer2Nodes Message",
+  "description": "Universal envelope for direct peer-to-peer app instance communication across mobile and desktop.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocolVersion",
+    "messageType",
+    "sessionId",
+    "sourceNodeId",
+    "timestamp",
+    "sequence"
+  ],
+  "properties": {
+    "protocolVersion": {
+      "type": "string",
+      "description": "Semver-compatible protocol version used for negotiation.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "messageType": {
+      "type": "string",
+      "enum": [
+        "HELLO",
+        "HELLO_ACK",
+        "OFFER",
+        "ANSWER",
+        "CANDIDATE",
+        "DATA",
+        "HEARTBEAT",
+        "GOODBYE",
+        "ERROR"
+      ]
+    },
+    "sessionId": {
+      "type": "string",
+      "description": "Session correlation id for all exchanged messages.",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "sourceNodeId": {
+      "type": "string",
+      "description": "Stable sender identifier for this app instance.",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "targetNodeId": {
+      "type": "string",
+      "description": "Optional direct target identifier when known.",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Capabilities announced during handshake.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "webrtc-data-channel",
+          "wifi-direct",
+          "wifi-aware",
+          "ble-gatt",
+          "end-to-end-encryption",
+          "file-transfer",
+          "streaming"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "negotiation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transport": {
+          "type": "string",
+          "enum": [
+            "webrtc",
+            "wifi-direct",
+            "wifi-aware",
+            "ble"
+          ]
+        },
+        "sdp": {
+          "type": "string",
+          "description": "SDP offer/answer content when using WebRTC."
+        },
+        "candidate": {
+          "type": "string",
+          "description": "ICE candidate string when using WebRTC."
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "description": "Application payload and metadata.",
+      "additionalProperties": true,
+      "properties": {
+        "contentType": {
+          "type": "string",
+          "description": "MIME type of payload encoding."
+        },
+        "encoding": {
+          "type": "string",
+          "enum": [
+            "json",
+            "utf8",
+            "base64",
+            "binary"
+          ]
+        },
+        "body": {
+          "description": "Payload body content. Shape depends on `encoding` (for example object for json, string for utf8/base64, or binary-compatible representation)."
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "description": "Security metadata for verification.",
+      "additionalProperties": false,
+      "properties": {
+        "encryption": {
+          "type": "string",
+          "enum": [
+            "none",
+            "dtls",
+            "noise-xk",
+            "tls"
+          ]
+        },
+        "signature": {
+          "type": "string",
+          "description": "Detached message signature when enabled."
+        },
+        "keyId": {
+          "type": "string",
+          "description": "Public key identifier used by signature verification."
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "messageType": {
+            "const": "HELLO"
+          }
+        },
+        "required": [
+          "messageType"
+        ]
+      },
+      "then": {
+        "required": [
+          "capabilities"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "messageType": {
+            "enum": [
+              "OFFER",
+              "ANSWER",
+              "CANDIDATE"
+            ]
+          }
+        },
+        "required": [
+          "messageType"
+        ]
+      },
+      "then": {
+        "required": [
+          "negotiation"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "messageType": {
+            "const": "DATA"
+          }
+        },
+        "required": [
+          "messageType"
+        ]
+      },
+      "then": {
+        "required": [
+          "payload"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "messageType": {
+            "const": "ERROR"
+          }
+        },
+        "required": [
+          "messageType"
+        ]
+      },
+      "then": {
+        "required": [
+          "error"
+        ]
+      }
+    }
+  ]
+}

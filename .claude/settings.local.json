@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node javascript/peer-channel.test.js)",
+      "Bash(node -e ' *)",
+      "Bash(node javascript/peer-crypto-adapter.test.js)"
+    ]
+  }
+}
