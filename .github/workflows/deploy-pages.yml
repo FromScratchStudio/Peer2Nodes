@@ -2,8 +2,6 @@ name: Deploy branch previews to GitHub Pages
 
 on:
   push:
-    branches:
-      - '**'
   workflow_dispatch:
 
 permissions:
@@ -186,6 +184,7 @@ jobs:
           (site_dir / 'index.html').write_text(html_content, encoding='utf-8')
           PY
 
+          mkdir -p "$site_dir"
           touch "$site_dir/.nojekyll"
           echo "branch_slug=$branch_slug" >> "$GITHUB_OUTPUT"
           echo "site_dir=$site_dir" >> "$GITHUB_OUTPUT"
@@ -211,8 +210,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
           git commit -m "Deploy ${GITHUB_REF_NAME} @ ${GITHUB_SHA}"
-          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push --force origin gh-pages
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w 0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" \
+            push --force "https://github.com/${GITHUB_REPOSITORY}.git" gh-pages
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
