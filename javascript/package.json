@@ -1,0 +1,13 @@
+{
+  "name": "peer2nodes-js",
+  "version": "1.0.0",
+  "description": "JavaScript implementation of the Peer2Nodes protocol",
+  "main": "peer2nodes.js",
+  "scripts": {
+    "test": "node peer-crypto-adapter.test.js && node peer-channel.test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

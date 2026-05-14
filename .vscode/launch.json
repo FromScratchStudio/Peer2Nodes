@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Simulation: Debug in Chrome",
+      "file": "${workspaceFolder}/simulation/index.html",
+      "webRoot": "${workspaceFolder}/simulation",
+      "sourceMapPathOverrides": {
+        "webpack:///./~/*": "${workspaceFolder}/node_modules/*",
+        "meteor://💻app/*": "${workspaceFolder}/*"
+      }
+    },
+    {
+      "type": "msedge",
+      "request": "launch",
+      "name": "Simulation: Debug in Edge",
+      "file": "${workspaceFolder}/simulation/index.html",
+      "webRoot": "${workspaceFolder}/simulation"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "JS: Run all tests",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["test"],
+      "cwd": "${workspaceFolder}/javascript",
+      "console": "integratedTerminal"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "JS: Debug current test file",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}/javascript",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "JS: Debug peer-channel tests",
+      "program": "${workspaceFolder}/javascript/peer-channel.test.js",
+      "cwd": "${workspaceFolder}/javascript",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "JS: Debug peer-crypto-adapter tests",
+      "program": "${workspaceFolder}/javascript/peer-crypto-adapter.test.js",
+      "cwd": "${workspaceFolder}/javascript",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
