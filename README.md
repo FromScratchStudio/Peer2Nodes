@@ -43,3 +43,4 @@ Each runtime includes:
 - Session lifecycle handling for `HELLO`, `HELLO_ACK`, `DATA`, `HEARTBEAT`, and `GOODBYE`
 - A transport abstraction that can be backed by WebRTC, local wireless discovery, or another direct transport
 - A loopback/in-memory transport implementation for integration and smoke testing
+- A connection-info sharing utility (`ConnectionInfoShare`) for URI/NFC/QR payload exchange
