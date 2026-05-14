@@ -52,16 +52,36 @@ class ConnectionInfoShare {
     } catch (error) {
       throw new Error(`Failed to parse connection info: ${error.message}`);
     }
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.nodeId !== 'string' || parsed.nodeId.length === 0) {
-      throw new Error('Connection info is missing nodeId');
-    }
-    return parsed;
+    return normalizeConnectionInfo(parsed);
   }
 
   static toNfcTextPayload(connectionInfo) { return this.toShareUri(connectionInfo); }
   static fromNfcTextPayload(payload) { return this.fromShareUri(payload); }
   static toQrPayload(connectionInfo) { return this.toShareUri(connectionInfo); }
   static fromQrPayload(payload) { return this.fromShareUri(payload); }
+}
+
+function normalizeConnectionInfo(parsed) {
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.nodeId !== 'string' || parsed.nodeId.length === 0) {
+    throw new Error('Connection info is missing nodeId');
+  }
+
+  if (parsed.version !== VERSION) {
+    throw new Error(`Unsupported connection info version: ${parsed.version}`);
+  }
+
+  const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : null;
+  const capabilities = Array.isArray(parsed.capabilities)
+    ? parsed.capabilities.filter((cap) => typeof cap === 'string')
+    : [];
+
+  return {
+    version: VERSION,
+    nodeId: parsed.nodeId,
+    displayName,
+    capabilities,
+    createdAt: parsed.createdAt,
+  };
 }
 
 export { ConnectionInfoShare };

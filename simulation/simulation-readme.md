@@ -85,7 +85,7 @@ or flags required on supported versions.
 |---|---|
 | **INSTANCES** (left) | List of created instances. Each shows a color dot, name, and truncated nodeId. |
 | **CHANNELS** (right) | Active channels. Shows peer names, channel status, message history, and the compose row. |
-| **SHARE CONNECTION INFO** (right, under connect) | Generates a `peer2nodes://connect` URI, previews a QR code, supports copy/native sharing, and can use Web NFC read/write on mobile. |
+| **SHARE CONNECTION INFO** (right, under connect) | Generates a `peer2nodes://connect` URI, supports copy/native sharing, can render QR code on demand, and supports Web NFC read/write on mobile. |
 | **EVENT LOG** (bottom) | Timestamped audit log of every event across all instances, color-coded by instance. |
 
 ---
@@ -128,7 +128,7 @@ The channel card appears with status **READY** and a compose row.
 2. Click **Generate NFC + QR**.
 3. Share using:
    - **Copy** / **Native Share** (shares the URI text),
-   - the displayed **QR code** (scan with another device),
+   - **Render QR (remote)** to generate a QR image (opt-in; sends payload to `api.qrserver.com`),
    - **NFC Write** (writes URI to an NFC tag on supported mobile browsers).
 4. To consume shared info:
    - paste a shared URI and click **Connect from Shared URI**, or

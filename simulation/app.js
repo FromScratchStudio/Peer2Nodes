@@ -330,8 +330,18 @@ function generateSharePayload() {
 
   const shareUri = ConnectionInfoShare.toShareUri(buildConnectionInfo(instance));
   $('#share-uri').value = shareUri;
-  renderQrPreview(shareUri);
+  renderQrPreview('');
   appendLog(instance.name, instance.color, 'share info generated', shortId(instance.nodeId));
+}
+
+function renderRemoteQrPreview() {
+  const value = $('#share-uri').value.trim();
+  if (!value) {
+    appendLog('system', '#d29922', 'generate share info first');
+    return;
+  }
+  renderQrPreview(value);
+  appendLog('system', '#d29922', 'remote QR rendered', 'shares payload with api.qrserver.com');
 }
 
 async function copyShareUri() {
@@ -432,7 +442,7 @@ async function nfcReadAndConnect() {
         if (record.recordType !== 'url' && record.recordType !== 'text') continue;
         const data = new TextDecoder('utf-8').decode(record.data);
         $('#share-uri').value = data;
-        renderQrPreview(data);
+        renderQrPreview('');
         appendLog('system', '#58a6ff', 'NFC tag read');
         await connectFromSharedUri();
         return;
@@ -446,7 +456,9 @@ async function nfcReadAndConnect() {
 
 function bindAsyncClick(selector, action, errorMessagePrefix) {
   $(selector).addEventListener('click', () => {
-    Promise.resolve(action()).catch((err) => appendLog('system', '#f85149', `${errorMessagePrefix} (${selector})`, err.message));
+    Promise.resolve()
+      .then(() => action())
+      .catch((err) => appendLog('system', '#f85149', `${errorMessagePrefix} (${selector})`, err.message));
   });
 }
 
@@ -456,6 +468,7 @@ $('#inp-name').addEventListener('keydown', e => { if (e.key === 'Enter') createI
 $('#btn-open-channel').addEventListener('click', openChannel);
 $('#btn-clear-log').addEventListener('click', clearLog);
 $('#btn-generate-share').addEventListener('click', generateSharePayload);
+$('#btn-render-remote-qr').addEventListener('click', renderRemoteQrPreview);
 bindAsyncClick('#btn-copy-share', copyShareUri, 'copy failed');
 bindAsyncClick('#btn-share-native', nativeShareUri, 'share failed');
 bindAsyncClick('#btn-connect-from-share', connectFromSharedUri, 'connect failed');

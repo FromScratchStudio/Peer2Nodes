@@ -40,8 +40,24 @@ test('supports NFC and QR payload helpers', () => {
   assert.equal(ConnectionInfoShare.fromQrPayload(qrPayload).nodeId, 'node-456');
 });
 
+test('normalizes optional fields and rejects unsupported version', () => {
+  const raw = {
+    version: 1,
+    nodeId: 'node-789',
+    displayName: 123,
+    capabilities: ['end-to-end-encryption', null, 42]
+  };
+
+  const parsed = ConnectionInfoShare.fromShareUri(ConnectionInfoShare.toShareUri(raw));
+  assert.equal(parsed.displayName, null);
+  assert.deepEqual(parsed.capabilities, ['end-to-end-encryption']);
+
+  const invalid = { ...raw, version: 2 };
+  assert.throws(() => ConnectionInfoShare.fromShareUri(ConnectionInfoShare.toShareUri(invalid)), /Unsupported connection info version/);
+});
+
 test('throws for invalid URIs', () => {
   assert.throws(() => ConnectionInfoShare.fromShareUri('not-peer2nodes'));
 });
 
-console.log('\n3 tests — 3 passed, 0 failed');
+console.log('\n4 tests — 4 passed, 0 failed');

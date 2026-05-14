@@ -331,6 +331,7 @@
           <select id="sel-share-instance" class="inst-select"></select>
           <button id="btn-generate-share" class="primary">Generate NFC + QR</button>
           <button id="btn-copy-share">Copy</button>
+          <button id="btn-render-remote-qr">Render QR (remote)</button>
           <button id="btn-share-native">Native Share</button>
           <button id="btn-nfc-write">NFC Write</button>
           <button id="btn-nfc-read">NFC Read</button>
@@ -340,7 +341,7 @@
           <button id="btn-connect-from-share">Connect from Shared URI</button>
         </div>
         <img id="qr-preview" alt="No QR code generated" />
-        <div class="share-help">On mobile Chrome (HTTPS), NFC read/write uses Web NFC. Else, paste/share URI manually.</div>
+        <div class="share-help">On mobile Chrome (HTTPS), NFC read/write uses Web NFC. QR render is opt-in and uses api.qrserver.com.</div>
       </div>
       <div id="channels-list">
         <div class="empty-hint">Create instances above, then open a channel between two of them.</div>
