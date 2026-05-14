@@ -489,9 +489,12 @@
 
   <!-- Tab nav – visible on mobile only -->
   <nav class="mobile-tabs" role="tablist" aria-label="Panel navigation">
-    <button class="mobile-tab" data-panel="instances-panel" role="tab">NODES</button>
-    <button class="mobile-tab active" data-panel="channels-panel" role="tab">CHANNELS</button>
-    <button class="mobile-tab" data-panel="log-panel" role="tab">LOG</button>
+    <button id="tab-instances" class="mobile-tab" data-panel="instances-panel" role="tab"
+            aria-selected="false" aria-controls="instances-panel" tabindex="-1">NODES</button>
+    <button id="tab-channels" class="mobile-tab active" data-panel="channels-panel" role="tab"
+            aria-selected="true" aria-controls="channels-panel" tabindex="0">CHANNELS</button>
+    <button id="tab-log" class="mobile-tab" data-panel="log-panel" role="tab"
+            aria-selected="false" aria-controls="log-panel" tabindex="-1">LOG</button>
   </nav>
 
   <div class="content-area">
@@ -499,7 +502,7 @@
     <div class="main">
 
       <!-- Instances panel -->
-      <section id="instances-panel">
+      <section id="instances-panel" role="tabpanel" aria-labelledby="tab-instances" tabindex="0">
         <div class="panel-title">INSTANCES</div>
         <div class="create-row">
           <input id="inp-name" type="text" placeholder="Instance name…" />
@@ -509,7 +512,7 @@
       </section>
 
       <!-- Channels panel -->
-      <section id="channels-panel">
+      <section id="channels-panel" role="tabpanel" aria-labelledby="tab-channels" tabindex="0">
         <div class="connect-bar">
           <span style="color:var(--muted);font-size:10px;letter-spacing:1px">CONNECT</span>
           <select id="sel-initiator" class="inst-select"></select>
@@ -543,11 +546,11 @@
     </div><!-- /.main -->
 
     <!-- Event log -->
-    <section id="log-panel">
+    <section id="log-panel" role="tabpanel" aria-labelledby="tab-log" tabindex="0">
       <div class="log-header" id="log-header-toggle" title="Toggle log">
         EVENT LOG
         <span class="log-toggle" aria-hidden="true">▲</span>
-        <button id="btn-clear-log" onclick="event.stopPropagation()">Clear</button>
+        <button id="btn-clear-log">Clear</button>
       </div>
       <div id="log"></div>
     </section>
@@ -564,12 +567,16 @@
       var logPanel    = document.getElementById('log-panel');
       var instPanel   = document.getElementById('instances-panel');
       var chPanel     = document.getElementById('channels-panel');
+      var mq          = window.matchMedia('(max-width: 640px)');
 
-      function isMobile() { return window.innerWidth <= 640; }
+      function isMobile() { return mq.matches; }
 
       function activateTab(panelId) {
         tabs.forEach(function (t) {
-          t.classList.toggle('active', t.dataset.panel === panelId);
+          var active = t.dataset.panel === panelId;
+          t.classList.toggle('active', active);
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
+          t.setAttribute('tabindex', active ? '0' : '-1');
         });
 
         if (panelId === 'log-panel') {
@@ -606,8 +613,12 @@
         }
       }
 
+      var resizeTimer;
       window.addEventListener('resize', function () {
-        if (!isMobile()) resetDesktop();
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () {
+          if (!isMobile()) resetDesktop();
+        }, 150);
       });
 
       initLayout();
@@ -615,10 +626,17 @@
 
     /* ── Collapsible log panel ── */
     (function () {
-      var toggle = document.getElementById('log-header-toggle');
-      var panel  = document.getElementById('log-panel');
+      var toggle   = document.getElementById('log-header-toggle');
+      var panel    = document.getElementById('log-panel');
+      var clearBtn = document.getElementById('btn-clear-log');
+
       toggle.addEventListener('click', function () {
         panel.classList.toggle('log-collapsed');
+      });
+
+      /* Prevent the Clear button click from also toggling the panel */
+      clearBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
       });
     }());
   </script>
