@@ -1,20 +1,16 @@
-name: Deploy Simulation to GitHub Pages
+name: Deploy branch previews to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'simulation/**'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-deployment
   cancel-in-progress: false
 
 jobs:
@@ -24,17 +20,218 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare Pages content
+        id: prepare
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          slugify() {
+            printf '%s' "$1" \
+              | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's#[^a-z0-9._-]+#-#g; s#-+#-#g; s#^-+##; s#-+$##'
+          }
+
+          branch_slug="$(slugify "$BRANCH_NAME")"
+          default_slug="$(slugify "$DEFAULT_BRANCH")"
+          if [ -z "$branch_slug" ]; then
+            branch_slug="branch"
+          fi
+          if [ -z "$default_slug" ]; then
+            default_slug="default"
+          fi
+
+          site_dir="$RUNNER_TEMP/pages-site"
+          repo_url="https://github.com/$REPOSITORY.git"
+          rm -rf "$site_dir"
+          mkdir -p "$site_dir"
+
+          if git ls-remote --exit-code --heads "$repo_url" gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 "$repo_url" gh-pages:refs/remotes/origin/gh-pages
+            git archive origin/gh-pages | tar -x -C "$site_dir"
+          fi
+
+          preserved_branches="$RUNNER_TEMP/preserved-branches"
+          rm -rf "$preserved_branches"
+          if [ -d "$site_dir/branches" ]; then
+            mv "$site_dir/branches" "$preserved_branches"
+          fi
+
+          rm -rf "$site_dir"
+          mkdir -p "$site_dir"
+          if [ -d "$preserved_branches" ]; then
+            mv "$preserved_branches" "$site_dir/branches"
+          fi
+
+          preview_dir="$site_dir/branches/$branch_slug"
+          rm -rf "$preview_dir"
+          mkdir -p "$preview_dir"
+          rsync -a --delete simulation/ "$preview_dir"/
+
+          {
+            printf '%s\n' "$BRANCH_NAME"
+            printf '%s\n' "$branch_slug"
+            printf '%s\n' "$COMMIT_SHA"
+            printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$preview_dir/.preview-meta"
+
+          rm -rf "$site_dir/default"
+          if [ -d "$site_dir/branches/$default_slug" ]; then
+            mkdir -p "$site_dir/default"
+            rsync -a --delete "$site_dir/branches/$default_slug"/ "$site_dir/default"/
+          fi
+
+          python - "$site_dir" "$DEFAULT_BRANCH" "$default_slug" <<'PY'
+          import html
+          import pathlib
+          import sys
+
+          site_dir = pathlib.Path(sys.argv[1])
+          default_branch = sys.argv[2]
+          default_slug = sys.argv[3]
+          branches_dir = site_dir / 'branches'
+          entries = []
+
+          for meta_path in sorted(branches_dir.glob('*/.preview-meta')):
+            lines = meta_path.read_text(encoding='utf-8').splitlines()
+            if len(lines) < 4:
+              continue
+            branch_name, branch_slug, commit_sha, updated_at = lines[:4]
+            entries.append({
+              'branch_name': branch_name,
+              'branch_slug': branch_slug,
+              'commit_sha': commit_sha,
+              'updated_at': updated_at,
+              'is_default': branch_slug == default_slug,
+            })
+
+          entries.sort(key=lambda item: (not item['is_default'], item['branch_name'].lower()))
+          items = []
+          for entry in entries:
+            branch_label = html.escape(entry['branch_name'])
+            branch_slug = html.escape(entry['branch_slug'])
+            commit_short = html.escape(entry['commit_sha'][:7])
+            updated_at = html.escape(entry['updated_at'])
+            badge = ' <strong>(default)</strong>' if entry['is_default'] else ''
+            items.append(
+              f'<li><a href="./branches/{branch_slug}/">{branch_label}</a>{badge} '
+              f'<span>— commit <code>{commit_short}</code>, updated {updated_at}</span></li>'
+            )
+
+          default_link = (
+            f'<p>Stable default-branch URL: <a href="./default/">./default/</a> '
+            f'({html.escape(default_branch)})</p>'
+            if any(entry['is_default'] for entry in entries)
+            else f'<p>No deployment is available yet for the default branch ({html.escape(default_branch)}).</p>'
+          )
+
+          html_content = f"""<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Peer2Nodes GitHub Pages previews</title>
+            <style>
+              :root {{
+                color-scheme: dark;
+                font-family: Inter, system-ui, sans-serif;
+              }}
+              body {{
+                margin: 0;
+                padding: 2rem;
+                background: #0d1117;
+                color: #c9d1d9;
+              }}
+              main {{
+                max-width: 56rem;
+                margin: 0 auto;
+              }}
+              a {{
+                color: #58a6ff;
+              }}
+              code {{
+                background: #161b22;
+                border-radius: 0.25rem;
+                padding: 0.1rem 0.3rem;
+              }}
+              li {{
+                margin: 0.75rem 0;
+              }}
+            </style>
+          </head>
+          <body>
+            <main>
+              <h1>Peer2Nodes GitHub Pages previews</h1>
+              <p>Every push publishes the simulation for its branch under <code>/branches/&lt;branch-slug&gt;/</code>.</p>
+              {default_link}
+              <h2>Available previews</h2>
+              <ul>
+                {''.join(items) if items else '<li>No previews published yet.</li>'}
+              </ul>
+            </main>
+          </body>
+          </html>
+          """
+          (site_dir / 'index.html').write_text(html_content, encoding='utf-8')
+          PY
+
+          touch "$site_dir/.nojekyll"
+          echo "branch_slug=$branch_slug" >> "$GITHUB_OUTPUT"
+          echo "site_dir=$site_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Update gh-pages branch state
+        env:
+          SITE_DIR: ${{ steps.prepare.outputs.site_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          publish_dir="$RUNNER_TEMP/gh-pages-branch"
+          rm -rf "$publish_dir"
+
+          cleanup() {
+            git -C "$GITHUB_WORKSPACE" worktree remove --force "$publish_dir" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git worktree add --force "$publish_dir" origin/gh-pages
+            cd "$publish_dir"
+            git checkout -B gh-pages origin/gh-pages
+          else
+            git worktree add --detach "$publish_dir" HEAD
+            cd "$publish_dir"
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          find "$publish_dir" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -a "$SITE_DIR"/. "$publish_dir"/
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "Deploy ${GITHUB_REF_NAME} @ ${GITHUB_SHA}"
+          git push --force origin gh-pages
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: simulation
+          path: ${{ steps.prepare.outputs.site_dir }}
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

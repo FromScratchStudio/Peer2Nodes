@@ -189,6 +189,7 @@ perfect forward secrecy) but the following points apply:
 | `simulation/index.html` | HTML shell + dark terminal CSS |
 | `simulation/peer2nodes-browser.js` | `SimulationBus`, `BusPeerTransport`, `PeerNodeClient` (ES module) |
 | `simulation/peer-channel-browser.js` | `PeerCryptoService` (Web Crypto), `OutboundMessageQueue`, `PeerChannelManager` (ES module) |
+| `simulation/connection-info-share-browser.js` | Connection-info share encoding/decoding for URI, NFC payload, and QR payload |
 | `simulation/app.js` | Instance management, channel orchestration, message send/receive, event log |
 | `simulation/simulation-adr.md` | This document |
 | `simulation/simulation-readme.md` | Usage guide and run instructions |

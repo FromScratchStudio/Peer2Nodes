@@ -1,5 +1,6 @@
 import { SimulationBus, BusPeerTransport, PeerNodeClient, Capability } from './peer2nodes-browser.js';
 import { PeerCryptoService, PeerChannelManager, ChannelStatus } from './peer-channel-browser.js';
+import { ConnectionInfoShare } from './connection-info-share-browser.js';
 
 // ── Shared bus — all instances route messages through it ─────────────────────
 const bus = new SimulationBus();
@@ -64,11 +65,22 @@ function refreshSelects() {
   const opts = [...instances.values()]
     .map(i => `<option value="${i.id}">${escHtml(i.name)}</option>`)
     .join('');
-  $$('.inst-select').forEach(sel => {
+
+  $$('.inst-select')
+    .filter((sel) => sel.id !== 'sel-share-instance')
+    .forEach((sel) => {
     const prev = sel.value;
     sel.innerHTML = '<option value="">— select —</option>' + opts;
     if (prev && instances.has(prev)) sel.value = prev;
   });
+
+  const shareSel = $('#sel-share-instance');
+  if (shareSel) {
+    const prev = shareSel.value;
+    shareSel.innerHTML = opts;
+    if (prev && instances.has(prev)) shareSel.value = prev;
+    if (!shareSel.value && instances.size) shareSel.value = [...instances.keys()][0];
+  }
 }
 
 // ── Render channels ───────────────────────────────────────────────────────────
@@ -284,11 +296,187 @@ async function handleCloseChannel(sid) {
 // ── Clear log ─────────────────────────────────────────────────────────────────
 function clearLog() { $('#log').innerHTML = ''; }
 
+function selectedShareInstance() {
+  const id = $('#sel-share-instance').value;
+  return instances.get(id) ?? null;
+}
+
+function buildConnectionInfo(instance) {
+  return ConnectionInfoShare.createConnectionInfo({
+    nodeId: instance.nodeId,
+    displayName: instance.name,
+    capabilities: [Capability.END_TO_END_ENCRYPTION],
+  });
+}
+
+function renderQrPreview(payload) {
+  const img = $('#qr-preview');
+  if (!payload) {
+    img.removeAttribute('src');
+    img.alt = 'No QR code generated';
+    return;
+  }
+  const encoded = encodeURIComponent(payload);
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
+  img.alt = 'Connection QR code';
+}
+
+function generateSharePayload() {
+  const instance = selectedShareInstance();
+  if (!instance) {
+    appendLog('system', '#d29922', 'select instance to share');
+    return;
+  }
+
+  const shareUri = ConnectionInfoShare.toShareUri(buildConnectionInfo(instance));
+  $('#share-uri').value = shareUri;
+  renderQrPreview('');
+  appendLog(instance.name, instance.color, 'share info generated', shortId(instance.nodeId));
+}
+
+function renderRemoteQrPreview() {
+  const value = $('#share-uri').value.trim();
+  if (!value) {
+    appendLog('system', '#d29922', 'generate share info first');
+    return;
+  }
+  renderQrPreview(value);
+  appendLog('system', '#d29922', 'remote QR rendered', 'shares payload with api.qrserver.com');
+}
+
+async function copyShareUri() {
+  const value = $('#share-uri').value.trim();
+  if (!value) {
+    appendLog('system', '#d29922', 'generate share info first');
+    return;
+  }
+  if (!navigator.clipboard?.writeText) {
+    appendLog('system', '#d29922', 'clipboard API unavailable');
+    return;
+  }
+  await navigator.clipboard.writeText(value);
+  appendLog('system', '#58a6ff', 'share URI copied');
+}
+
+async function nativeShareUri() {
+  const value = $('#share-uri').value.trim();
+  if (!value) {
+    appendLog('system', '#d29922', 'generate share info first');
+    return;
+  }
+  if (!navigator.share) {
+    appendLog('system', '#d29922', 'native share API unavailable');
+    return;
+  }
+  await navigator.share({ title: 'Peer2Nodes connection', text: value });
+  appendLog('system', '#58a6ff', 'share sheet opened');
+}
+
+async function connectFromSharedUri() {
+  const uri = $('#share-uri').value.trim();
+  if (!uri) {
+    appendLog('system', '#d29922', 'paste a shared URI first');
+    return;
+  }
+
+  let info;
+  try {
+    info = ConnectionInfoShare.fromShareUri(uri);
+  } catch (error) {
+    appendLog('system', '#f85149', 'invalid shared URI', error.message);
+    return;
+  }
+
+  const responder = instanceByNodeId(info.nodeId);
+  if (!responder) {
+    appendLog('system', '#f85149', 'shared target not found in simulation', shortId(info.nodeId));
+    return;
+  }
+
+  const candidates = [...instances.values()].filter(i => i.id !== responder.id);
+  const initiator = candidates[0];
+  if (!initiator) {
+    appendLog('system', '#d29922', 'need at least two instances');
+    return;
+  }
+
+  $('#sel-initiator').value = initiator.id;
+  $('#sel-responder').value = responder.id;
+  appendLog('system', '#58a6ff', 'connecting from shared info', `${initiator.name} → ${responder.name}`);
+  await openChannel();
+}
+
+async function nfcWriteShareUri() {
+  const value = $('#share-uri').value.trim();
+  if (!value) {
+    appendLog('system', '#d29922', 'generate share info first');
+    return;
+  }
+  if (!('NDEFReader' in window)) {
+    appendLog('system', '#d29922', 'Web NFC unavailable');
+    return;
+  }
+
+  try {
+    const ndef = new NDEFReader();
+    await ndef.write({ records: [{ recordType: 'url', data: value }] });
+    appendLog('system', '#58a6ff', 'NFC write complete');
+  } catch (error) {
+    appendLog('system', '#f85149', 'NFC write failed', error.message);
+  }
+}
+
+async function nfcReadAndConnect() {
+  if (!('NDEFReader' in window)) {
+    appendLog('system', '#d29922', 'Web NFC unavailable');
+    return;
+  }
+
+  try {
+    const ndef = new NDEFReader();
+    await ndef.scan();
+    appendLog('system', '#58a6ff', 'NFC scan active', 'tap a tag');
+
+    ndef.addEventListener('reading', async (event) => {
+      for (const record of event.message.records) {
+        if (record.recordType !== 'url' && record.recordType !== 'text') continue;
+        const data = new TextDecoder('utf-8').decode(record.data);
+        $('#share-uri').value = data;
+        renderQrPreview('');
+        appendLog('system', '#58a6ff', 'NFC tag read');
+        await connectFromSharedUri();
+        return;
+      }
+      appendLog('system', '#d29922', 'NFC tag has no compatible record');
+    }, { once: true });
+  } catch (error) {
+    appendLog('system', '#f85149', 'NFC scan failed', error.message);
+  }
+}
+
+function bindAsyncClick(selector, action, errorMessagePrefix) {
+  $(selector).addEventListener('click', async () => {
+    try {
+      await action();
+    } catch (err) {
+      appendLog('system', '#f85149', `${errorMessagePrefix} (${selector})`, err.message);
+    }
+  });
+}
+
 // ── Wire up static controls ───────────────────────────────────────────────────
 $('#btn-create').addEventListener('click', createInstance);
 $('#inp-name').addEventListener('keydown', e => { if (e.key === 'Enter') createInstance(); });
 $('#btn-open-channel').addEventListener('click', openChannel);
 $('#btn-clear-log').addEventListener('click', clearLog);
+$('#btn-generate-share').addEventListener('click', generateSharePayload);
+$('#btn-render-remote-qr').addEventListener('click', renderRemoteQrPreview);
+bindAsyncClick('#btn-copy-share', copyShareUri, 'copy failed');
+bindAsyncClick('#btn-share-native', nativeShareUri, 'share failed');
+bindAsyncClick('#btn-connect-from-share', connectFromSharedUri, 'connect failed');
+bindAsyncClick('#btn-nfc-write', nfcWriteShareUri, 'NFC write failed');
+bindAsyncClick('#btn-nfc-read', nfcReadAndConnect, 'NFC read failed');
+$('#share-uri').addEventListener('keydown', e => { if (e.key === 'Enter') connectFromSharedUri(); });
 
 // Auto-create two instances so the UI isn't empty on load
 createInstance().then(() => createInstance());

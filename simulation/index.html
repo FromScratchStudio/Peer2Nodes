@@ -115,6 +115,43 @@
     }
     .connect-bar .arrow { color: var(--muted); }
 
+    .share-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .share-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .share-uri-wrap {
+      display: flex;
+      gap: 6px;
+      width: 100%;
+    }
+    #share-uri {
+      flex: 1;
+      min-width: 0;
+    }
+    #qr-preview {
+      width: 160px;
+      height: 160px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      object-fit: contain;
+      background: #fff;
+      align-self: flex-start;
+    }
+    .share-help {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
     #channels-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 
     .ch-card {
@@ -287,6 +324,24 @@
         <span class="arrow">→</span>
         <select id="sel-responder" class="inst-select"></select>
         <button id="btn-open-channel" class="primary">Open Channel</button>
+      </div>
+      <div class="share-bar">
+        <div class="share-row">
+          <span style="color:var(--muted);font-size:10px;letter-spacing:1px">SHARE CONNECTION INFO</span>
+          <select id="sel-share-instance" class="inst-select"></select>
+          <button id="btn-generate-share" class="primary">Generate NFC + QR</button>
+          <button id="btn-copy-share">Copy</button>
+          <button id="btn-render-remote-qr">Render QR (remote)</button>
+          <button id="btn-share-native">Native Share</button>
+          <button id="btn-nfc-write">NFC Write</button>
+          <button id="btn-nfc-read">NFC Read</button>
+        </div>
+        <div class="share-uri-wrap">
+          <input id="share-uri" type="text" placeholder="Generated peer2nodes://connect URI…" />
+          <button id="btn-connect-from-share">Connect from Shared URI</button>
+        </div>
+        <img id="qr-preview" alt="No QR code generated" />
+        <div class="share-help">On mobile Chrome (HTTPS), NFC read/write uses Web NFC. QR render is opt-in and uses api.qrserver.com.</div>
       </div>
       <div id="channels-list">
         <div class="empty-hint">Create instances above, then open a channel between two of them.</div>

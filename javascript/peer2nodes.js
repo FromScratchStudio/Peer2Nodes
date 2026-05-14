@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { ConnectionInfoShare } = require('./connection-info-share');
 
 const MessageType = Object.freeze({
   HELLO: 'HELLO',
@@ -295,6 +296,7 @@ class PeerNodeClient {
 
 module.exports = {
   Capability,
+  ConnectionInfoShare,
   EncryptionMode,
   MemoryPeerTransport,
   MessageType,

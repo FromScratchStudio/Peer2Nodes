@@ -85,6 +85,7 @@ or flags required on supported versions.
 |---|---|
 | **INSTANCES** (left) | List of created instances. Each shows a color dot, name, and truncated nodeId. |
 | **CHANNELS** (right) | Active channels. Shows peer names, channel status, message history, and the compose row. |
+| **SHARE CONNECTION INFO** (right, under connect) | Generates a `peer2nodes://connect` URI, supports copy/native sharing, can render QR code on demand, and supports Web NFC read/write on mobile. |
 | **EVENT LOG** (bottom) | Timestamped audit log of every event across all instances, color-coded by instance. |
 
 ---
@@ -120,6 +121,21 @@ Initiator → Responder : DATA / auth-confirm   { sig }
 ```
 
 The channel card appears with status **READY** and a compose row.
+
+### 2.5 Share connection info (QR + NFC)
+
+1. Select an instance in **SHARE CONNECTION INFO**.
+2. Click **Generate NFC + QR**.
+3. Share using:
+   - **Copy** / **Native Share** (shares the URI text),
+   - **Render QR (remote)** to generate a QR image (opt-in; sends payload to `api.qrserver.com`),
+   - **NFC Write** (writes URI to an NFC tag on supported mobile browsers).
+4. To consume shared info:
+   - paste a shared URI and click **Connect from Shared URI**, or
+   - tap **NFC Read** then tap an NFC tag to auto-connect.
+
+> **Web NFC note:** available on mobile Chromium browsers in secure contexts (HTTPS).
+> When unavailable, use Copy/Native Share + QR workflow.
 
 > **Note:** Both the initiator and the responder log `channel READY` independently —
 > this reflects both sides completing mutual authentication, not a duplicate event.
