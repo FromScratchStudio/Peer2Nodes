@@ -443,17 +443,23 @@ async function nfcReadAndConnect() {
   }
 }
 
+function bindAsyncClick(selector, action, errorEvent) {
+  $(selector).addEventListener('click', () => {
+    Promise.resolve(action()).catch((err) => appendLog('system', '#f85149', errorEvent, err.message));
+  });
+}
+
 // ── Wire up static controls ───────────────────────────────────────────────────
 $('#btn-create').addEventListener('click', createInstance);
 $('#inp-name').addEventListener('keydown', e => { if (e.key === 'Enter') createInstance(); });
 $('#btn-open-channel').addEventListener('click', openChannel);
 $('#btn-clear-log').addEventListener('click', clearLog);
 $('#btn-generate-share').addEventListener('click', generateSharePayload);
-$('#btn-copy-share').addEventListener('click', () => copyShareUri().catch(err => appendLog('system', '#f85149', 'copy failed', err.message)));
-$('#btn-share-native').addEventListener('click', () => nativeShareUri().catch(err => appendLog('system', '#f85149', 'share failed', err.message)));
-$('#btn-connect-from-share').addEventListener('click', () => connectFromSharedUri().catch(err => appendLog('system', '#f85149', 'connect failed', err.message)));
-$('#btn-nfc-write').addEventListener('click', nfcWriteShareUri);
-$('#btn-nfc-read').addEventListener('click', nfcReadAndConnect);
+bindAsyncClick('#btn-copy-share', copyShareUri, 'copy failed');
+bindAsyncClick('#btn-share-native', nativeShareUri, 'share failed');
+bindAsyncClick('#btn-connect-from-share', connectFromSharedUri, 'connect failed');
+bindAsyncClick('#btn-nfc-write', nfcWriteShareUri, 'NFC write failed');
+bindAsyncClick('#btn-nfc-read', nfcReadAndConnect, 'NFC read failed');
 $('#share-uri').addEventListener('keydown', e => { if (e.key === 'Enter') connectFromSharedUri(); });
 
 // Auto-create two instances so the UI isn't empty on load

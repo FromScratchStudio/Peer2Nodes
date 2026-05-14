@@ -5,12 +5,19 @@ function toBase64UrlUtf8(text) {
   const bytes = new TextEncoder().encode(text);
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  const noPadding = stripTrailingEquals(btoa(binary));
+  return noPadding.split('+').join('-').split('/').join('_');
+}
+
+function stripTrailingEquals(value) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 61) end -= 1; // '='
+  return value.slice(0, end);
 }
 
 function fromBase64UrlUtf8(input) {
   const padded = input + '='.repeat((4 - (input.length % 4)) % 4);
-  const b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+  const b64 = padded.split('-').join('+').split('_').join('/');
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
@@ -44,7 +51,9 @@ class ConnectionInfoShare {
     } catch (error) {
       throw new Error(`Failed to parse connection info: ${error.message}`);
     }
-    if (!parsed?.nodeId || typeof parsed.nodeId !== 'string') throw new Error('Connection info is missing nodeId');
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.nodeId !== 'string' || parsed.nodeId.length === 0) {
+      throw new Error('Connection info is missing nodeId');
+    }
     return parsed;
   }
 

@@ -4,16 +4,20 @@ const SCHEME = 'peer2nodes://connect?c=';
 const VERSION = 1;
 
 function toUrlSafeBase64(input) {
-  return Buffer.from(input, 'utf8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
+  const base64 = Buffer.from(input, 'utf8').toString('base64');
+  const noPadding = stripTrailingEquals(base64);
+  return noPadding.split('+').join('-').split('/').join('_');
+}
+
+function stripTrailingEquals(value) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 61) end -= 1; // '='
+  return value.slice(0, end);
 }
 
 function fromUrlSafeBase64(input) {
   const padded = input + '='.repeat((4 - (input.length % 4)) % 4);
-  const normalized = padded.replace(/-/g, '+').replace(/_/g, '/');
+  const normalized = padded.split('-').join('+').split('_').join('/');
   return Buffer.from(normalized, 'base64').toString('utf8');
 }
 
