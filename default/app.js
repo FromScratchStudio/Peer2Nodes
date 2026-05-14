@@ -9,6 +9,7 @@ const bus = new SimulationBus();
 const instances = new Map();
 // channels: sessionId → { sessionId, peerIds: [id?, id?], peerNodeIds: [nodeId, nodeId], status, messages: [] }
 const channels  = new Map();
+const collapsedChannels = new Set();
 
 let nextNum = 1;
 const COLORS = ['#58a6ff', '#3fb950', '#f78166', '#d2a8ff', '#ffa657', '#79c0ff', '#ff7b72', '#56d364'];
@@ -104,9 +105,10 @@ function renderChannels() {
     const nameB = instB?.name ?? shortId(ch.peerNodeIds[1]);
     const colorA = instA?.color ?? '#c9d1d9';
     const colorB = instB?.color ?? '#c9d1d9';
+    const isCollapsed = collapsedChannels.has(sid);
 
     const card = document.createElement('div');
-    card.className = 'ch-card';
+    card.className = `ch-card${isCollapsed ? ' ch-collapsed' : ''}`;
     card.dataset.sid = sid;
 
     const msgHistory = ch.messages.map(m =>
@@ -117,6 +119,9 @@ function renderChannels() {
       `</div>`
     ).join('');
 
+    const toggleLabel = isCollapsed ? 'Expand channel' : 'Collapse channel';
+    const toggleIcon = isCollapsed ? '▸' : '▾';
+
     card.innerHTML =
       `<div class="ch-header">` +
         `<span class="ch-peers">` +
@@ -124,26 +129,30 @@ function renderChannels() {
           `<span class="ch-arrow"> ⟷ </span>` +
           `<span style="color:${colorB}">${escHtml(nameB)}</span>` +
         `</span>` +
+        `<button class="btn-toggle-ch" data-sid="${sid}" title="${toggleLabel}" aria-label="${toggleLabel}">${toggleIcon}</button>` +
         `<span class="ch-badge ${statusClass}">${ch.status}</span>` +
         `<button class="btn-close-ch" data-sid="${sid}" title="Close channel">✕</button>` +
       `</div>` +
-      (ch.messages.length ? `<div class="msg-history">${msgHistory}</div>` : '') +
-      (ch.status === ChannelStatus.READY
-        ? `<div class="ch-compose">` +
-            `<select class="sender-sel" data-sid="${sid}">` +
-              `<option value="${idA ?? ''}">${escHtml(nameA)}</option>` +
-              `<option value="${idB ?? ''}">${escHtml(nameB)}</option>` +
-            `</select>` +
-            `<input class="msg-input" data-sid="${sid}" type="text" placeholder="Type a message…" />` +
-            `<button class="btn-send" data-sid="${sid}">Send</button>` +
-          `</div>`
-        : '');
+      `<div class="ch-body">` +
+        (ch.messages.length ? `<div class="msg-history">${msgHistory}</div>` : '') +
+        (ch.status === ChannelStatus.READY
+          ? `<div class="ch-compose">` +
+              `<select class="sender-sel" data-sid="${sid}">` +
+                `<option value="${idA ?? ''}">${escHtml(nameA)}</option>` +
+                `<option value="${idB ?? ''}">${escHtml(nameB)}</option>` +
+              `</select>` +
+              `<input class="msg-input" data-sid="${sid}" type="text" placeholder="Type a message…" />` +
+              `<button class="btn-send" data-sid="${sid}">Send</button>` +
+            `</div>`
+          : '') +
+      `</div>`;
 
     list.appendChild(card);
   }
 
   $$('.btn-send').forEach(btn => btn.addEventListener('click', () => handleSend(btn.dataset.sid)));
   $$('.msg-input').forEach(inp => inp.addEventListener('keydown', e => { if (e.key === 'Enter') handleSend(inp.dataset.sid); }));
+  $$('.btn-toggle-ch').forEach(btn => btn.addEventListener('click', () => handleToggleChannelCard(btn.dataset.sid)));
   $$('.btn-close-ch').forEach(btn => btn.addEventListener('click', () => handleCloseChannel(btn.dataset.sid)));
 }
 
@@ -209,6 +218,7 @@ async function createInstance() {
   manager.onChannelClosed = (sid) => {
     const ch = channels.get(sid);
     if (ch) ch.status = ChannelStatus.CLOSED;
+    collapsedChannels.delete(sid);
     appendLog(name, color, 'channel closed');
     renderChannels();
   };
@@ -291,6 +301,13 @@ async function handleCloseChannel(sid) {
   if (!ch) return;
   const inst = ch.peerIds[0] ? instances.get(ch.peerIds[0]) : null;
   if (inst) await inst.manager.closeChannel(sid);
+}
+
+function handleToggleChannelCard(sid) {
+  if (!channels.has(sid)) return;
+  if (collapsedChannels.has(sid)) collapsedChannels.delete(sid);
+  else collapsedChannels.add(sid);
+  renderChannels();
 }
 
 // ── Clear log ─────────────────────────────────────────────────────────────────
