@@ -427,7 +427,7 @@ async function nfcReadAndConnect() {
     await ndef.scan();
     appendLog('system', '#58a6ff', 'NFC scan active', 'tap a tag');
 
-    ndef.onreading = async (event) => {
+    ndef.addEventListener('reading', async (event) => {
       for (const record of event.message.records) {
         if (record.recordType !== 'url' && record.recordType !== 'text') continue;
         const data = new TextDecoder('utf-8').decode(record.data);
@@ -438,15 +438,15 @@ async function nfcReadAndConnect() {
         return;
       }
       appendLog('system', '#d29922', 'NFC tag has no compatible record');
-    };
+    }, { once: true });
   } catch (error) {
     appendLog('system', '#f85149', 'NFC scan failed', error.message);
   }
 }
 
-function bindAsyncClick(selector, action, errorEvent) {
+function bindAsyncClick(selector, action, errorMessagePrefix) {
   $(selector).addEventListener('click', () => {
-    Promise.resolve(action()).catch((err) => appendLog('system', '#f85149', `${errorEvent} (${selector})`, err.message));
+    Promise.resolve(action()).catch((err) => appendLog('system', '#f85149', `${errorMessagePrefix} (${selector})`, err.message));
   });
 }
 

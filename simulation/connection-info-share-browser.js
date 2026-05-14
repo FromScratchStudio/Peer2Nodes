@@ -3,8 +3,9 @@ const VERSION = 1;
 
 function toBase64UrlUtf8(text) {
   const bytes = new TextEncoder().encode(text);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  const chars = new Array(bytes.length);
+  for (let i = 0; i < bytes.length; i += 1) chars[i] = String.fromCharCode(bytes[i]);
+  const binary = chars.join('');
   const noPadding = stripTrailingEquals(btoa(binary));
   return noPadding.split('+').join('-').split('/').join('_');
 }
