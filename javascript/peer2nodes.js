@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { ConnectionInfoShare } = require('./connection-info-share');
+const { HttpPollingSignaling, SignalType, WebRTCPeerTransport } = require('./webrtc-p2p');
 
 const MessageType = Object.freeze({
   HELLO: 'HELLO',
@@ -298,9 +299,12 @@ module.exports = {
   Capability,
   ConnectionInfoShare,
   EncryptionMode,
+  HttpPollingSignaling,
   MemoryPeerTransport,
   MessageType,
   PayloadEncoding,
   PeerNodeClient,
+  SignalType,
+  WebRTCPeerTransport,
   TransportKind
 };

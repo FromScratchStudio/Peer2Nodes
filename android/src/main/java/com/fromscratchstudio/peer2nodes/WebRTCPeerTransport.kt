@@ -1,0 +1,155 @@
+package com.fromscratchstudio.peer2nodes
+
+enum class WebRTCSignalType {
+    OFFER,
+    ANSWER,
+    CANDIDATE
+}
+
+data class WebRTCSignal(
+    val sourceNodeId: String,
+    val targetNodeId: String,
+    val sessionId: String? = null,
+    val type: WebRTCSignalType,
+    val sdp: String? = null,
+    val candidate: String? = null
+)
+
+fun interface WebRTCSignalHandler {
+    fun onSignal(signal: WebRTCSignal)
+}
+
+interface WebRTCSignalingClient {
+    fun start(handler: WebRTCSignalHandler)
+    fun stop()
+    fun send(signal: WebRTCSignal)
+}
+
+fun interface WebRTCDataHandler {
+    fun onData(remoteNodeId: String, payload: ByteArray)
+}
+
+fun interface WebRTCIceCandidateHandler {
+    fun onIceCandidate(remoteNodeId: String, candidate: String)
+}
+
+interface WebRTCEngine {
+    fun setDataHandler(handler: WebRTCDataHandler)
+    fun setIceCandidateHandler(handler: WebRTCIceCandidateHandler)
+    fun start()
+    fun stop()
+    fun createOffer(remoteNodeId: String): String
+    fun createAnswer(remoteNodeId: String, offerSdp: String): String
+    fun applyAnswer(remoteNodeId: String, answerSdp: String)
+    fun addIceCandidate(remoteNodeId: String, candidate: String)
+    fun send(remoteNodeId: String, payload: ByteArray)
+}
+
+interface PeerEnvelopeCodec {
+    fun encode(envelope: PeerEnvelope): ByteArray
+    fun decode(payload: ByteArray): PeerEnvelope
+}
+
+class WebRTCPeerTransport(
+    private val nodeId: String,
+    private val signaling: WebRTCSignalingClient,
+    private val engine: WebRTCEngine,
+    private val codec: PeerEnvelopeCodec
+) : PeerTransport {
+    private var handler: PeerTransportHandler? = null
+    private val announcedPeers = mutableSetOf<String>()
+    private val sessionTargets = mutableMapOf<String, String>() // sessionId -> remoteNodeId
+
+    override fun setMessageHandler(handler: PeerTransportHandler) {
+        this.handler = handler
+    }
+
+    override fun start() {
+        engine.setDataHandler(WebRTCDataHandler { remoteNodeId, payload ->
+            runCatching { codec.decode(payload) }
+                .onSuccess { envelope ->
+                    sessionTargets[envelope.sessionId] = remoteNodeId
+                    handler?.onEnvelope(envelope)
+                }
+        })
+
+        engine.setIceCandidateHandler(WebRTCIceCandidateHandler { remoteNodeId, candidate ->
+            runCatching {
+                signaling.send(
+                    WebRTCSignal(
+                        sourceNodeId = nodeId,
+                        targetNodeId = remoteNodeId,
+                        type = WebRTCSignalType.CANDIDATE,
+                        candidate = candidate
+                    )
+                )
+            }
+        })
+
+        signaling.start(WebRTCSignalHandler { signal ->
+            handleIncomingSignal(signal)
+        })
+        engine.start()
+    }
+
+    override fun stop() {
+        signaling.stop()
+        engine.stop()
+        announcedPeers.clear()
+        sessionTargets.clear()
+    }
+
+    override fun send(envelope: PeerEnvelope) {
+        val remoteNodeId = envelope.targetNodeId ?: sessionTargets[envelope.sessionId]
+            ?: throw IllegalArgumentException("targetNodeId is required for WebRTC transport")
+
+        sessionTargets[envelope.sessionId] = remoteNodeId
+        ensureOfferSentIfNeeded(remoteNodeId = remoteNodeId, sessionId = envelope.sessionId)
+        engine.send(remoteNodeId, codec.encode(envelope))
+    }
+
+    private fun ensureOfferSentIfNeeded(remoteNodeId: String, sessionId: String) {
+        if (announcedPeers.contains(remoteNodeId)) return
+        announcedPeers += remoteNodeId
+        val offerSdp = engine.createOffer(remoteNodeId)
+        signaling.send(
+            WebRTCSignal(
+                sourceNodeId = nodeId,
+                targetNodeId = remoteNodeId,
+                sessionId = sessionId,
+                type = WebRTCSignalType.OFFER,
+                sdp = offerSdp
+            )
+        )
+    }
+
+    private fun handleIncomingSignal(signal: WebRTCSignal) {
+        if (signal.targetNodeId != nodeId) return
+        signal.sessionId?.let { sessionTargets[it] = signal.sourceNodeId }
+
+        when (signal.type) {
+            WebRTCSignalType.OFFER -> {
+                val offer = signal.sdp ?: return
+                announcedPeers += signal.sourceNodeId
+                val answerSdp = engine.createAnswer(signal.sourceNodeId, offer)
+                signaling.send(
+                    WebRTCSignal(
+                        sourceNodeId = nodeId,
+                        targetNodeId = signal.sourceNodeId,
+                        sessionId = signal.sessionId,
+                        type = WebRTCSignalType.ANSWER,
+                        sdp = answerSdp
+                    )
+                )
+            }
+            WebRTCSignalType.ANSWER -> {
+                val answer = signal.sdp ?: return
+                engine.applyAnswer(signal.sourceNodeId, answer)
+            }
+            WebRTCSignalType.CANDIDATE -> {
+                val candidate = signal.candidate ?: return
+                engine.addIceCandidate(signal.sourceNodeId, candidate)
+            }
+        }
+    }
+}
