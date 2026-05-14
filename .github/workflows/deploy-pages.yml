@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-site
+  group: pages-deployment
   cancel-in-progress: false
 
 jobs:
@@ -52,11 +52,12 @@ jobs:
           fi
 
           site_dir="$RUNNER_TEMP/pages-site"
+          repo_url="https://github.com/$REPOSITORY.git"
           rm -rf "$site_dir"
           mkdir -p "$site_dir"
 
-          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
-            git fetch --depth=1 origin gh-pages
+          if git ls-remote --exit-code --heads "$repo_url" gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 "$repo_url" gh-pages:refs/remotes/origin/gh-pages
             git archive origin/gh-pages | tar -x -C "$site_dir"
           fi
 
@@ -184,14 +185,12 @@ jobs:
           (site_dir / 'index.html').write_text(html_content, encoding='utf-8')
           PY
 
-          mkdir -p "$site_dir"
           touch "$site_dir/.nojekyll"
           echo "branch_slug=$branch_slug" >> "$GITHUB_OUTPUT"
           echo "site_dir=$site_dir" >> "$GITHUB_OUTPUT"
 
       - name: Update gh-pages branch state
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SITE_DIR: ${{ steps.prepare.outputs.site_dir }}
         shell: bash
         run: |
@@ -199,20 +198,31 @@ jobs:
 
           publish_dir="$RUNNER_TEMP/gh-pages-branch"
           rm -rf "$publish_dir"
-          mkdir -p "$publish_dir"
-          cd "$publish_dir"
 
-          git init
-          git checkout -b gh-pages
+          cleanup() {
+            git -C "$GITHUB_WORKSPACE" worktree remove --force "$publish_dir" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git worktree add --force "$publish_dir" origin/gh-pages
+            cd "$publish_dir"
+            git checkout -B gh-pages origin/gh-pages
+          else
+            git worktree add --detach "$publish_dir" HEAD
+            cd "$publish_dir"
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          find "$publish_dir" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
           cp -a "$SITE_DIR"/. "$publish_dir"/
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
           git commit -m "Deploy ${GITHUB_REF_NAME} @ ${GITHUB_SHA}"
-          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w 0)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" \
-            push --force "https://github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          git push --force origin gh-pages
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
