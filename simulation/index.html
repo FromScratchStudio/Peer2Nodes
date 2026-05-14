@@ -136,6 +136,12 @@
       overflow: hidden;
       min-width: 0;
     }
+    .channels-top {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
 
     .connect-bar {
       display: flex;
@@ -194,6 +200,11 @@
       background: var(--surface);
       overflow: hidden;
     }
+    .ch-body {
+      display: flex;
+      flex-direction: column;
+    }
+    .ch-card.ch-collapsed .ch-body { display: none; }
 
     .ch-header {
       display: flex;
@@ -227,6 +238,16 @@
       line-height: 1;
     }
     .btn-close-ch:hover { color: var(--red); }
+    .btn-toggle-ch {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 6px;
+      line-height: 1;
+    }
+    .btn-toggle-ch:hover { color: var(--accent); }
 
     /* Message history */
     .msg-history {
@@ -375,6 +396,9 @@
       #channels-panel {
         position: absolute;
         inset: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
       /* Hide inactive panels; JS adds .tab-active to show */
       #instances-panel:not(.tab-active),
@@ -433,6 +457,13 @@
       /* Share bar */
       .share-bar { padding: 10px 12px; gap: 10px; }
 
+      /* Keep top controls scrollable independently from channels list */
+      .channels-top {
+        max-height: 48%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
       /* Share row: 2-column button grid */
       .share-row { gap: 8px; }
       .share-row > span { width: 100%; }
@@ -457,6 +488,7 @@
       .ch-header { padding: 10px 12px; }
       .ch-peers { font-size: 14px; }
       .ch-badge { font-size: 11px; padding: 3px 8px; }
+      .btn-toggle-ch { min-height: unset; padding: 6px 8px; font-size: 12px; }
 
       /* Message history */
       .msg-history { max-height: 180px; padding: 10px 12px; }
@@ -472,8 +504,14 @@
       .log-header { padding: 10px 14px; font-size: 11px; }
       #log { padding: 6px 14px; font-size: 13px; line-height: 1.7; }
 
-      /* Channels list */
-      #channels-list { padding: 10px; }
+      /* Channels list stays visible at bottom and scrollable */
+      #channels-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 10px;
+      }
 
       /* Empty hint */
       .empty-hint { font-size: 13px; padding: 30px 16px; }
@@ -513,30 +551,32 @@
 
       <!-- Channels panel -->
       <section id="channels-panel" class="tab-active" role="tabpanel" aria-labelledby="tab-channels">
-        <div class="connect-bar">
-          <span style="color:var(--muted);font-size:10px;letter-spacing:1px">CONNECT</span>
-          <select id="sel-initiator" class="inst-select"></select>
-          <span class="arrow">→</span>
-          <select id="sel-responder" class="inst-select"></select>
-          <button id="btn-open-channel" class="primary">Open Channel</button>
-        </div>
-        <div class="share-bar">
-          <div class="share-row">
-            <span style="color:var(--muted);font-size:10px;letter-spacing:1px">SHARE CONNECTION INFO</span>
-            <select id="sel-share-instance" class="inst-select"></select>
-            <button id="btn-generate-share" class="primary">Generate NFC + QR</button>
-            <button id="btn-copy-share">Copy</button>
-            <button id="btn-render-remote-qr">Render QR (remote)</button>
-            <button id="btn-share-native">Native Share</button>
-            <button id="btn-nfc-write">NFC Write</button>
-            <button id="btn-nfc-read">NFC Read</button>
+        <div class="channels-top">
+          <div class="connect-bar">
+            <span style="color:var(--muted);font-size:10px;letter-spacing:1px">CONNECT</span>
+            <select id="sel-initiator" class="inst-select"></select>
+            <span class="arrow">→</span>
+            <select id="sel-responder" class="inst-select"></select>
+            <button id="btn-open-channel" class="primary">Open Channel</button>
           </div>
-          <div class="share-uri-wrap">
-            <input id="share-uri" type="text" placeholder="Generated peer2nodes://connect URI…" />
-            <button id="btn-connect-from-share">Connect from Shared URI</button>
+          <div class="share-bar">
+            <div class="share-row">
+              <span style="color:var(--muted);font-size:10px;letter-spacing:1px">SHARE CONNECTION INFO</span>
+              <select id="sel-share-instance" class="inst-select"></select>
+              <button id="btn-generate-share" class="primary">Generate NFC + QR</button>
+              <button id="btn-copy-share">Copy</button>
+              <button id="btn-render-remote-qr">Render QR (remote)</button>
+              <button id="btn-share-native">Native Share</button>
+              <button id="btn-nfc-write">NFC Write</button>
+              <button id="btn-nfc-read">NFC Read</button>
+            </div>
+            <div class="share-uri-wrap">
+              <input id="share-uri" type="text" placeholder="Generated peer2nodes://connect URI…" />
+              <button id="btn-connect-from-share">Connect from Shared URI</button>
+            </div>
+            <img id="qr-preview" alt="No QR code generated" />
+            <div class="share-help">On mobile Chrome (HTTPS), NFC read/write uses Web NFC. QR render is opt-in and uses api.qrserver.com.</div>
           </div>
-          <img id="qr-preview" alt="No QR code generated" />
-          <div class="share-help">On mobile Chrome (HTTPS), NFC read/write uses Web NFC. QR render is opt-in and uses api.qrserver.com.</div>
         </div>
         <div id="channels-list">
           <div class="empty-hint">Create instances above, then open a channel between two of them.</div>
