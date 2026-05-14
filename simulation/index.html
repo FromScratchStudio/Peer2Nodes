@@ -27,10 +27,12 @@
       font-family: var(--font);
       font-size: 13px;
       height: 100vh;
-      height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+    @supports (height: 100dvh) {
+      body { height: 100dvh; }
     }
 
     /* ── Header ── */
@@ -414,7 +416,6 @@
         z-index: 10;
       }
       #log-panel.tab-active { display: flex; }
-      #log-panel.log-collapsed { height: auto; }
 
       /* Larger touch targets */
       button {
@@ -488,7 +489,7 @@
       .ch-header { padding: 10px 12px; }
       .ch-peers { font-size: 14px; }
       .ch-badge { font-size: 11px; padding: 3px 8px; }
-      .btn-toggle-ch { min-height: unset; padding: 6px 8px; font-size: 12px; }
+      .btn-toggle-ch { padding: 6px 8px; font-size: 12px; }
 
       /* Message history */
       .msg-history { max-height: 180px; padding: 10px 12px; }
@@ -603,7 +604,7 @@
     /* ── Mobile tab navigation ── */
     (function () {
       var tabs        = document.querySelectorAll('.mobile-tab');
-      var tabArray    = Array.prototype.slice.call(tabs);
+      var tabArray    = Array.from(tabs);
       var mainEl      = document.querySelector('.main');
       var logPanel    = document.getElementById('log-panel');
       var instPanel   = document.getElementById('instances-panel');

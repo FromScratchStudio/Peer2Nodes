@@ -119,6 +119,9 @@ function renderChannels() {
       `</div>`
     ).join('');
 
+    const toggleLabel = isCollapsed ? 'Expand channel' : 'Collapse channel';
+    const toggleIcon = isCollapsed ? '▸' : '▾';
+
     card.innerHTML =
       `<div class="ch-header">` +
         `<span class="ch-peers">` +
@@ -126,7 +129,7 @@ function renderChannels() {
           `<span class="ch-arrow"> ⟷ </span>` +
           `<span style="color:${colorB}">${escHtml(nameB)}</span>` +
         `</span>` +
-        `<button class="btn-toggle-ch" data-sid="${sid}" title="${isCollapsed ? 'Expand channel' : 'Collapse channel'}" aria-label="${isCollapsed ? 'Expand channel' : 'Collapse channel'}">${isCollapsed ? '▸' : '▾'}</button>` +
+        `<button class="btn-toggle-ch" data-sid="${sid}" title="${toggleLabel}" aria-label="${toggleLabel}">${toggleIcon}</button>` +
         `<span class="ch-badge ${statusClass}">${ch.status}</span>` +
         `<button class="btn-close-ch" data-sid="${sid}" title="Close channel">✕</button>` +
       `</div>` +
