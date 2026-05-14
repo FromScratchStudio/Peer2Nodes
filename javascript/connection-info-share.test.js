@@ -45,12 +45,14 @@ test('normalizes optional fields and rejects unsupported version', () => {
     version: 1,
     nodeId: 'node-789',
     displayName: 123,
-    capabilities: ['end-to-end-encryption', null, 42]
+    capabilities: ['end-to-end-encryption', null, 42],
+    createdAt: 'not-a-timestamp'
   };
 
   const parsed = ConnectionInfoShare.fromShareUri(ConnectionInfoShare.toShareUri(raw));
   assert.equal(parsed.displayName, null);
   assert.deepEqual(parsed.capabilities, ['end-to-end-encryption']);
+  assert.equal(parsed.createdAt, null);
 
   const invalid = { ...raw, version: 2 };
   assert.throws(() => ConnectionInfoShare.fromShareUri(ConnectionInfoShare.toShareUri(invalid)), /Unsupported connection info version/);

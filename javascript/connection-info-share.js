@@ -97,8 +97,13 @@ function normalizeConnectionInfo(parsed) {
     nodeId: parsed.nodeId,
     displayName,
     capabilities,
-    createdAt: parsed.createdAt
+    createdAt: normalizeCreatedAt(parsed.createdAt)
   };
+}
+
+function normalizeCreatedAt(value) {
+  if (typeof value !== 'string') return null;
+  return Number.isNaN(Date.parse(value)) ? null : value;
 }
 
 module.exports = {
