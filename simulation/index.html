@@ -502,7 +502,7 @@
     <div class="main">
 
       <!-- Instances panel -->
-      <section id="instances-panel" role="tabpanel" aria-labelledby="tab-instances" tabindex="0">
+      <section id="instances-panel" role="tabpanel" aria-labelledby="tab-instances">
         <div class="panel-title">INSTANCES</div>
         <div class="create-row">
           <input id="inp-name" type="text" placeholder="Instance name…" />
@@ -512,7 +512,7 @@
       </section>
 
       <!-- Channels panel -->
-      <section id="channels-panel" role="tabpanel" aria-labelledby="tab-channels" tabindex="0">
+      <section id="channels-panel" class="tab-active" role="tabpanel" aria-labelledby="tab-channels">
         <div class="connect-bar">
           <span style="color:var(--muted);font-size:10px;letter-spacing:1px">CONNECT</span>
           <select id="sel-initiator" class="inst-select"></select>
@@ -546,7 +546,7 @@
     </div><!-- /.main -->
 
     <!-- Event log -->
-    <section id="log-panel" role="tabpanel" aria-labelledby="tab-log" tabindex="0">
+    <section id="log-panel" role="tabpanel" aria-labelledby="tab-log">
       <div class="log-header" id="log-header-toggle" title="Toggle log">
         EVENT LOG
         <span class="log-toggle" aria-hidden="true">▲</span>
@@ -563,6 +563,7 @@
     /* ── Mobile tab navigation ── */
     (function () {
       var tabs        = document.querySelectorAll('.mobile-tab');
+      var tabArray    = Array.prototype.slice.call(tabs);
       var mainEl      = document.querySelector('.main');
       var logPanel    = document.getElementById('log-panel');
       var instPanel   = document.getElementById('instances-panel');
@@ -596,6 +597,20 @@
         tab.addEventListener('click', function () {
           if (isMobile()) activateTab(tab.dataset.panel);
         });
+
+        /* Arrow-key navigation between tabs (ARIA tablist pattern) */
+        tab.addEventListener('keydown', function (e) {
+          if (!isMobile()) return;
+          var idx = tabArray.indexOf(e.currentTarget);
+          var next = -1;
+          if (e.key === 'ArrowRight') next = (idx + 1) % tabArray.length;
+          if (e.key === 'ArrowLeft')  next = (idx - 1 + tabArray.length) % tabArray.length;
+          if (next !== -1) {
+            e.preventDefault();
+            activateTab(tabArray[next].dataset.panel);
+            tabArray[next].focus();
+          }
+        });
       });
 
       function resetDesktop() {
@@ -607,7 +622,9 @@
 
       function initLayout() {
         if (isMobile()) {
-          activateTab('channels-panel');
+          /* Honour initial HTML state (channels-panel has tab-active) */
+          var activeTab = tabArray.find(function (t) { return t.classList.contains('active'); });
+          activateTab(activeTab ? activeTab.dataset.panel : 'channels-panel');
         } else {
           resetDesktop();
         }
@@ -616,9 +633,7 @@
       var resizeTimer;
       window.addEventListener('resize', function () {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(function () {
-          if (!isMobile()) resetDesktop();
-        }, 150);
+        resizeTimer = setTimeout(initLayout, 150);
       });
 
       initLayout();
