@@ -57,6 +57,7 @@ public final class WebRTCPeerTransport: PeerTransport {
     private var handler: ((PeerEnvelope) -> Void)?
     private var announcedPeers = Set<String>()
     private var sessionTargets: [String: String] = [:] // sessionId -> remoteNodeId
+    public var onTransportError: ((Error) -> Void)?
 
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -86,23 +87,29 @@ public final class WebRTCPeerTransport: PeerTransport {
             guard let self else { return }
             do {
                 let envelope = try self.decoder.decode(PeerEnvelope.self, from: payload)
-                self.sessionTargets[envelope.sessionId] = remoteNodeId
+                if !envelope.sessionId.isEmpty {
+                    self.sessionTargets[envelope.sessionId] = remoteNodeId
+                }
                 self.handler?(envelope)
             } catch {
-                // malformed payload; ignored by design
+                self.onTransportError?(error)
             }
         }
 
         engine.onIceCandidate = { [weak self] remoteNodeId, candidate in
             guard let self else { return }
-            try? self.signaling.send(
-                WebRTCSignal(
-                    sourceNodeId: self.nodeId,
-                    targetNodeId: remoteNodeId,
-                    type: .candidate,
-                    candidate: candidate
+            do {
+                try self.signaling.send(
+                    WebRTCSignal(
+                        sourceNodeId: self.nodeId,
+                        targetNodeId: remoteNodeId,
+                        type: .candidate,
+                        candidate: candidate
+                    )
                 )
-            )
+            } catch {
+                self.onTransportError?(error)
+            }
         }
 
         try signaling.start { [weak self] signal in
@@ -176,7 +183,7 @@ public final class WebRTCPeerTransport: PeerTransport {
                 try engine.addIceCandidate(candidate, from: signal.sourceNodeId)
             }
         } catch {
-            // Signaling/engine errors are intentionally swallowed at transport level.
+            onTransportError?(error)
         }
     }
 }

@@ -18,6 +18,12 @@ function getFetch(fetchImpl) {
   throw new Error('fetch is required (provide fetchImpl in non-browser environments)');
 }
 
+function trimTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1; // '/'
+  return value.slice(0, end);
+}
+
 class HttpPollingSignaling {
   #fetch;
   #baseUrl;
@@ -26,21 +32,24 @@ class HttpPollingSignaling {
   #pollTimeoutMs;
   #stopped = true;
   #onSignal = null;
+  #onError = null;
 
   constructor({
     baseUrl,
     roomId,
     nodeId,
     pollTimeoutMs = 20_000,
+    onError = null,
     fetchImpl
   }) {
     if (!baseUrl || typeof baseUrl !== 'string') throw new Error('baseUrl is required');
     if (!roomId || typeof roomId !== 'string') throw new Error('roomId is required');
     if (!nodeId || typeof nodeId !== 'string') throw new Error('nodeId is required');
-    this.#baseUrl = baseUrl.replace(/\/+$/, '');
+    this.#baseUrl = trimTrailingSlashes(baseUrl);
     this.#roomId = roomId;
     this.#nodeId = nodeId;
-    this.#pollTimeoutMs = pollTimeoutMs;
+    this.#pollTimeoutMs = Math.max(1_000, Math.min(Number(pollTimeoutMs) || 20_000, 120_000));
+    this.#onError = typeof onError === 'function' ? onError : null;
     this.#fetch = getFetch(fetchImpl);
   }
 
@@ -48,7 +57,9 @@ class HttpPollingSignaling {
     assertFunction(onSignal, 'onSignal');
     this.#onSignal = onSignal;
     this.#stopped = false;
-    this.#pollLoop().catch(() => {});
+    this.#pollLoop().catch((error) => {
+      this.#onError?.(error);
+    });
   }
 
   async stop() {
@@ -91,7 +102,8 @@ class HttpPollingSignaling {
           if (this.#stopped) break;
           await this.#onSignal?.(signal);
         }
-      } catch {
+      } catch (error) {
+        this.#onError?.(error);
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
     }

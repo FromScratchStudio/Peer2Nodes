@@ -50,23 +50,23 @@ Each runtime includes:
 The repository now includes cross-platform WebRTC transport building blocks:
 
 - JavaScript:
-  - `/home/runner/work/Peer2Nodes/Peer2Nodes/javascript/webrtc-p2p.js`
-  - `/home/runner/work/Peer2Nodes/Peer2Nodes/javascript/signaling-server.js`
+  - `javascript/webrtc-p2p.js`
+  - `javascript/signaling-server.js`
 - iOS:
-  - `/home/runner/work/Peer2Nodes/Peer2Nodes/ios/Sources/Peer2Nodes/WebRTCPeerTransport.swift`
+  - `ios/Sources/Peer2Nodes/WebRTCPeerTransport.swift`
 - Android/Kotlin:
-  - `/home/runner/work/Peer2Nodes/Peer2Nodes/android/src/main/java/com/fromscratchstudio/peer2nodes/WebRTCPeerTransport.kt`
+  - `android/src/main/java/com/fromscratchstudio/peer2nodes/WebRTCPeerTransport.kt`
 
 For JavaScript signaling, run:
 
 ```bash
-cd /home/runner/work/Peer2Nodes/Peer2Nodes/javascript
+cd javascript
 npm run start:signaling
 ```
 
 Detailed design and integration guidance are documented in:
 
-- `/home/runner/work/Peer2Nodes/Peer2Nodes/WebRTC-p2p-ADR.md`
+- `WebRTC-p2p-ADR.md`
 
 ## GitHub Pages previews
 

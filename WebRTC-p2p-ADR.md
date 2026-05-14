@@ -3,96 +3,96 @@
 **Date:** 2026-05-14  
 **Status:** Implemented (runtime building blocks)
 
-## 1. Contexte
+## 1. Context
 
-La simulation actuelle repose sur un bus mémoire local à une page.  
-Ce modèle ne permet pas la communication entre deux navigateurs sur deux machines différentes.
+The existing simulation transport is in-memory and local to a single page/process.  
+It cannot connect two browsers running on two different machines.
 
-Pour supporter un mode réellement distribuable, il faut:
+To support real cross-device communication, we need:
 
-1. un transport P2P réel (WebRTC DataChannel) pour les messages applicatifs,
-2. un canal de signalisation pour échanger `offer` / `answer` / `candidate` pendant la négociation.
+1. a true P2P transport (WebRTC DataChannel) for application envelopes,
+2. a signaling path to exchange `offer` / `answer` / `candidate` during negotiation.
 
-## 2. Décision
+## 2. Decision
 
-Implémenter une base WebRTC P2P commune sur les trois runtimes (JS, iOS, Kotlin), en gardant:
+Implement Option B as a transport-layer extension across JavaScript, iOS, and Kotlin:
 
-- le `PeerNodeClient` et le protocole métier inchangés,
-- un remplacement propre au niveau de l’abstraction `PeerTransport`.
+- keep `PeerNodeClient` and protocol semantics unchanged,
+- introduce WebRTC as another `PeerTransport` implementation,
+- isolate signaling and engine responsibilities behind clean interfaces.
 
-## 3. Ce qui a été ajouté
+## 3. What was added
 
 ### 3.1 JavaScript
 
-Fichiers:
+Files:
 
-- `/home/runner/work/Peer2Nodes/Peer2Nodes/javascript/webrtc-p2p.js`
-- `/home/runner/work/Peer2Nodes/Peer2Nodes/javascript/signaling-server.js`
+- `javascript/webrtc-p2p.js`
+- `javascript/signaling-server.js`
 
-Contenu:
+Key elements:
 
-- `WebRTCPeerTransport`: transport `PeerTransport` basé sur `RTCPeerConnection` + `RTCDataChannel`.
-- `HttpPollingSignaling`: client de signalisation HTTP (publish + long polling).
-- `SignalType`: types de signal (`offer`, `answer`, `candidate`).
-- Serveur de signalisation minimal (Node.js `http`, sans dépendance externe) pour relayer les signaux entre pairs.
+- `WebRTCPeerTransport`: `PeerTransport` over `RTCPeerConnection` + `RTCDataChannel`.
+- `HttpPollingSignaling`: signaling client (publish + long-poll receive).
+- `SignalType`: `offer`, `answer`, `candidate`.
+- Minimal signaling relay server (Node `http`, no external dependency).
 
-Le transport WebRTC sérialise les `PeerEnvelope` en JSON sur DataChannel; après établissement du canal, les payloads ne transitent plus par le serveur.
+After DataChannel setup, `PeerEnvelope` messages flow peer-to-peer and do not traverse the signaling server.
 
 ### 3.2 iOS (Swift)
 
-Fichier:
+File:
 
-- `/home/runner/work/Peer2Nodes/Peer2Nodes/ios/Sources/Peer2Nodes/WebRTCPeerTransport.swift`
+- `ios/Sources/Peer2Nodes/WebRTCPeerTransport.swift`
 
-Contenu:
+Key elements:
 
 - `WebRTCSignalType`, `WebRTCSignal`
-- `WebRTCSignalingClient` (abstraction signalisation)
-- `WebRTCEngine` (abstraction moteur WebRTC natif)
-- `WebRTCPeerTransport` (implémente `PeerTransport`)
+- `WebRTCSignalingClient` (signaling abstraction)
+- `WebRTCEngine` (native WebRTC engine abstraction)
+- `WebRTCPeerTransport` (implements `PeerTransport`)
 
-Le transport orchestre le flux offer/answer/candidate et reste découplé de la librairie WebRTC choisie par l’app.
+This keeps app-specific WebRTC framework choices outside core transport logic.
 
 ### 3.3 Android/Kotlin
 
-Fichier:
+File:
 
-- `/home/runner/work/Peer2Nodes/Peer2Nodes/android/src/main/java/com/fromscratchstudio/peer2nodes/WebRTCPeerTransport.kt`
+- `android/src/main/java/com/fromscratchstudio/peer2nodes/WebRTCPeerTransport.kt`
 
-Contenu:
+Key elements:
 
 - `WebRTCSignalType`, `WebRTCSignal`
 - `WebRTCSignalingClient`, `WebRTCEngine`, `PeerEnvelopeCodec`
-- `WebRTCPeerTransport` (implémente `PeerTransport`)
+- `WebRTCPeerTransport` (implements `PeerTransport`)
 
-Même séparation des responsabilités que sur iOS: orchestration transport d’un côté, implémentation moteur/signaling de l’autre.
+The same separation of concerns is applied: orchestration in transport, platform specifics in adapters.
 
-## 4. Principes de clean code appliqués
+## 4. Clean code principles applied
 
-- **Single Responsibility**: transport, signalisation, moteur WebRTC séparés.
-- **Dependency Inversion**: iOS/Kotlin dépendent d’interfaces (`WebRTCEngine`, `WebRTCSignalingClient`), pas d’implémentations concrètes.
-- **Open/Closed**: possibilité de brancher un autre backend de signalisation sans toucher `PeerNodeClient`.
-- **Lisibilité**: conventions de nommage homogènes entre JS / Swift / Kotlin.
+- **Single Responsibility**: transport, signaling, and WebRTC engine are separated.
+- **Dependency Inversion**: iOS/Kotlin depend on interfaces, not concrete SDK bindings.
+- **Open/Closed**: signaling backend can be replaced without changing protocol logic.
+- **Consistency**: naming and flow are aligned across JS/Swift/Kotlin implementations.
 
-## 5. Flux opérationnel
+## 5. Runtime flow
 
-1. Le pair A veut parler à B ⇒ envoi d’un message via `WebRTCPeerTransport`.
-2. Si canal non établi, A crée une offer WebRTC et la publie via signalisation.
-3. B reçoit l’offer, génère l’answer, renvoie via signalisation.
-4. Les candidats ICE sont échangés via signalisation.
-5. Une fois le DataChannel ouvert, les `PeerEnvelope` circulent en P2P.
+1. Peer A sends to B via `WebRTCPeerTransport`.
+2. If no channel exists, A creates and signals an offer.
+3. B receives offer, creates answer, signals back.
+4. ICE candidates are exchanged through signaling.
+5. Once DataChannel opens, `PeerEnvelope` traffic is direct P2P.
 
-## 6. Limites et intégration applicative
+## 6. Operational notes
 
-- Le serveur de signalisation fourni est volontairement minimal (mémoire volatile).
-- En production, prévoir:
-  - authentification des pairs,
-  - contrôle d’accès par room,
-  - observabilité (logs/metrics),
-  - politique de rétention / nettoyage.
-- iOS et Kotlin exposent des contrats prêts à brancher sur le moteur WebRTC natif de l’application (WebRTC.framework / org.webrtc ou équivalent).
+- The provided signaling server is intentionally minimal and in-memory.
+- Production deployments should add:
+  - authentication and authorization,
+  - room/session controls,
+  - monitoring/metrics,
+  - lifecycle cleanup and persistence strategy (if needed).
 
-## 7. Compatibilité
+## 7. Compatibility
 
-Cette décision ne casse pas les transports existants (`MemoryPeerTransport` / `LoopbackPeerTransport` / simulation bus).  
-Le mode WebRTC devient une option supplémentaire compatible avec le même contrat de protocole.
+Existing transports (`MemoryPeerTransport`, `LoopbackPeerTransport`, simulation bus) remain valid.  
+WebRTC is introduced as an additional transport option behind the same protocol contract.

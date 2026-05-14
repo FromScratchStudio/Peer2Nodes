@@ -59,6 +59,7 @@ class WebRTCPeerTransport(
     private var handler: PeerTransportHandler? = null
     private val announcedPeers = mutableSetOf<String>()
     private val sessionTargets = mutableMapOf<String, String>() // sessionId -> remoteNodeId
+    var onTransportError: ((Throwable) -> Unit)? = null
 
     override fun setMessageHandler(handler: PeerTransportHandler) {
         this.handler = handler
@@ -68,8 +69,13 @@ class WebRTCPeerTransport(
         engine.setDataHandler(WebRTCDataHandler { remoteNodeId, payload ->
             runCatching { codec.decode(payload) }
                 .onSuccess { envelope ->
-                    sessionTargets[envelope.sessionId] = remoteNodeId
+                    if (envelope.sessionId.isNotBlank()) {
+                        sessionTargets[envelope.sessionId] = remoteNodeId
+                    }
                     handler?.onEnvelope(envelope)
+                }
+                .onFailure { error ->
+                    onTransportError?.invoke(error)
                 }
         })
 
@@ -83,7 +89,7 @@ class WebRTCPeerTransport(
                         candidate = candidate
                     )
                 )
-            }
+            }.onFailure { error -> onTransportError?.invoke(error) }
         })
 
         signaling.start(WebRTCSignalHandler { signal ->
@@ -130,25 +136,29 @@ class WebRTCPeerTransport(
         when (signal.type) {
             WebRTCSignalType.OFFER -> {
                 val offer = signal.sdp ?: return
-                announcedPeers += signal.sourceNodeId
-                val answerSdp = engine.createAnswer(signal.sourceNodeId, offer)
-                signaling.send(
-                    WebRTCSignal(
-                        sourceNodeId = nodeId,
-                        targetNodeId = signal.sourceNodeId,
-                        sessionId = signal.sessionId,
-                        type = WebRTCSignalType.ANSWER,
-                        sdp = answerSdp
+                runCatching {
+                    announcedPeers += signal.sourceNodeId
+                    val answerSdp = engine.createAnswer(signal.sourceNodeId, offer)
+                    signaling.send(
+                        WebRTCSignal(
+                            sourceNodeId = nodeId,
+                            targetNodeId = signal.sourceNodeId,
+                            sessionId = signal.sessionId,
+                            type = WebRTCSignalType.ANSWER,
+                            sdp = answerSdp
+                        )
                     )
-                )
+                }.onFailure { error -> onTransportError?.invoke(error) }
             }
             WebRTCSignalType.ANSWER -> {
                 val answer = signal.sdp ?: return
-                engine.applyAnswer(signal.sourceNodeId, answer)
+                runCatching { engine.applyAnswer(signal.sourceNodeId, answer) }
+                    .onFailure { error -> onTransportError?.invoke(error) }
             }
             WebRTCSignalType.CANDIDATE -> {
                 val candidate = signal.candidate ?: return
-                engine.addIceCandidate(signal.sourceNodeId, candidate)
+                runCatching { engine.addIceCandidate(signal.sourceNodeId, candidate) }
+                    .onFailure { error -> onTransportError?.invoke(error) }
             }
         }
     }

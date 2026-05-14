@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('node:http');
+const { EventEmitter } = require('node:events');
 
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -33,6 +34,11 @@ function badRequest(res, message) {
 }
 
 const queuesByRoom = new Map(); // roomId => Map<targetNodeId, signal[]>
+const queueEvents = new EventEmitter();
+
+function queueKey(roomId, nodeId) {
+  return `${roomId}::${nodeId}`;
+}
 
 function getRoomQueue(roomId) {
   if (!queuesByRoom.has(roomId)) queuesByRoom.set(roomId, new Map());
@@ -44,6 +50,7 @@ function enqueueSignal(signal) {
   const nodeQueue = roomQueue.get(signal.targetNodeId) ?? [];
   nodeQueue.push(signal);
   roomQueue.set(signal.targetNodeId, nodeQueue);
+  queueEvents.emit(queueKey(signal.roomId, signal.targetNodeId));
 }
 
 function drainSignals(roomId, nodeId) {
@@ -57,7 +64,8 @@ function validateNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function createSignalingServer({ port = 8787, host = '0.0.0.0' } = {}) {
+function createSignalingServer({ port = 8787, host = '0.0.0.0', pollTimeoutMs = 20_000 } = {}) {
+  const effectivePollTimeoutMs = Math.max(1_000, Math.min(Number(pollTimeoutMs) || 20_000, 120_000));
   const server = http.createServer(async (req, res) => {
     if (!req.url) return badRequest(res, 'missing_url');
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -94,17 +102,28 @@ function createSignalingServer({ port = 8787, host = '0.0.0.0' } = {}) {
     if (req.method === 'GET' && url.pathname === '/signals/poll') {
       const roomId = url.searchParams.get('roomId');
       const nodeId = url.searchParams.get('nodeId');
-      const timeoutMs = Math.max(500, Math.min(Number(url.searchParams.get('timeoutMs')) || 20_000, 30_000));
-
       if (!validateNonEmptyString(roomId)) return badRequest(res, 'missing_query:roomId');
       if (!validateNonEmptyString(nodeId)) return badRequest(res, 'missing_query:nodeId');
 
-      const startedAt = Date.now();
-      while (Date.now() - startedAt < timeoutMs) {
-        const signals = drainSignals(roomId, nodeId);
-        if (signals.length > 0) return sendJson(res, 200, { signals });
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
+      const immediateSignals = drainSignals(roomId, nodeId);
+      if (immediateSignals.length > 0) return sendJson(res, 200, { signals: immediateSignals });
+
+      await new Promise((resolve) => {
+        const eventName = queueKey(roomId, nodeId);
+        const onSignal = () => {
+          clearTimeout(timeoutHandle);
+          queueEvents.off(eventName, onSignal);
+          resolve();
+        };
+        const timeoutHandle = setTimeout(() => {
+          queueEvents.off(eventName, onSignal);
+          resolve();
+        }, effectivePollTimeoutMs);
+        queueEvents.on(eventName, onSignal);
+      });
+
+      const delayedSignals = drainSignals(roomId, nodeId);
+      if (delayedSignals.length > 0) return sendJson(res, 200, { signals: delayedSignals });
       return sendJson(res, 200, { signals: [] });
     }
 
