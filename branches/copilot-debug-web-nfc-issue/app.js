@@ -1,9 +1,15 @@
 import { SimulationBus, BusPeerTransport, PeerNodeClient, Capability } from './peer2nodes-browser.js';
 import { PeerCryptoService, PeerChannelManager, ChannelStatus } from './peer-channel-browser.js';
 import { ConnectionInfoShare } from './connection-info-share-browser.js';
+import { HttpPollingSignaling, WebRTCPeerTransport } from './webrtc-p2p-browser.js';
 
-// ── Shared bus — all instances route messages through it ─────────────────────
+// ── Shared bus — all instances route messages through it (Simulated mode) ────
 const bus = new SimulationBus();
+
+// ── Transport mode ────────────────────────────────────────────────────────────
+// 'bus' → in-memory SimulationBus (same-tab only)
+// 'webrtc' → real RTCPeerConnection via HTTP-polling signaling server
+let transportMode = 'bus';
 
 // instances: id → { id, name, nodeId, manager, color }
 const instances = new Map();
@@ -53,10 +59,12 @@ function renderInstances() {
   for (const inst of instances.values()) {
     const div = document.createElement('div');
     div.className = 'inst-card';
+    const isWebRtc = inst.transportMode === 'webrtc';
     div.innerHTML =
       `<span class="inst-dot" style="background:${inst.color}"></span>` +
       `<span class="inst-name">${escHtml(inst.name)}</span>` +
-      `<span class="inst-id">${shortId(inst.nodeId)}</span>`;
+      `<span class="inst-id">${shortId(inst.nodeId)}</span>` +
+      `<span class="inst-transport${isWebRtc ? ' inst-wrt' : ''}">${isWebRtc ? 'WRT' : 'SIM'}</span>`;
     list.appendChild(div);
   }
   refreshSelects();
@@ -122,6 +130,19 @@ function renderChannels() {
     const toggleLabel = isCollapsed ? 'Expand channel' : 'Collapse channel';
     const toggleIcon = isCollapsed ? '▸' : '▾';
 
+    // Only offer "send as" options for local instances (remote peers can't be sent on behalf of).
+    const senderOpts = [
+      idA && instances.has(idA) ? `<option value="${idA}">${escHtml(nameA)}</option>` : '',
+      idB && instances.has(idB) ? `<option value="${idB}">${escHtml(nameB)}</option>` : '',
+    ].join('');
+    const composeHtml = (ch.status === ChannelStatus.READY && senderOpts)
+      ? `<div class="ch-compose">` +
+          `<select class="sender-sel" data-sid="${sid}">${senderOpts}</select>` +
+          `<input class="msg-input" data-sid="${sid}" type="text" placeholder="Type a message…" />` +
+          `<button class="btn-send" data-sid="${sid}">Send</button>` +
+        `</div>`
+      : '';
+
     card.innerHTML =
       `<div class="ch-header">` +
         `<span class="ch-peers">` +
@@ -135,16 +156,7 @@ function renderChannels() {
       `</div>` +
       `<div class="ch-body">` +
         (ch.messages.length ? `<div class="msg-history">${msgHistory}</div>` : '') +
-        (ch.status === ChannelStatus.READY
-          ? `<div class="ch-compose">` +
-              `<select class="sender-sel" data-sid="${sid}">` +
-                `<option value="${idA ?? ''}">${escHtml(nameA)}</option>` +
-                `<option value="${idB ?? ''}">${escHtml(nameB)}</option>` +
-              `</select>` +
-              `<input class="msg-input" data-sid="${sid}" type="text" placeholder="Type a message…" />` +
-              `<button class="btn-send" data-sid="${sid}">Send</button>` +
-            `</div>`
-          : '') +
+        composeHtml +
       `</div>`;
 
     list.appendChild(card);
@@ -165,11 +177,28 @@ async function createInstance() {
 
   const color      = COLORS[(instances.size) % COLORS.length];
   const nodeId     = crypto.randomUUID();
-  const transport  = new BusPeerTransport(bus, nodeId);
+
+  let transport;
+  if (transportMode === 'webrtc') {
+    const signalingUrl = ($('#inp-signaling-url')?.value ?? '').trim() || 'http://localhost:8787';
+    const roomId = ($('#inp-room-id')?.value ?? '').trim();
+    if (!roomId) {
+      appendLog('system', '#d29922', 'WebRTC mode requires a Room ID — click Gen or enter one');
+      nextNum--;
+      return;
+    }
+    const onSigError = (err) => appendLog(name, color, 'signaling error', err?.message ?? String(err));
+    const signaling = new HttpPollingSignaling({ baseUrl: signalingUrl, roomId, nodeId, onError: onSigError });
+    transport = new WebRTCPeerTransport({ nodeId, signaling });
+    appendLog('system', '#58a6ff', 'WebRTC transport', `room: ${roomId} · relay: ${signalingUrl}`);
+  } else {
+    transport = new BusPeerTransport(bus, nodeId);
+  }
+
   const cryptoSvc  = await PeerCryptoService.create();
+  const instanceId = crypto.randomUUID();
   const client     = new PeerNodeClient({ nodeId, capabilities: [Capability.END_TO_END_ENCRYPTION], transport });
   const manager    = new PeerChannelManager({ client, cryptoService: cryptoSvc });
-  const instanceId = crypto.randomUUID();
 
   // Wire callbacks
   manager.onChannelReady = (sid, remoteNodeId) => {
@@ -225,7 +254,7 @@ async function createInstance() {
 
   await manager.start();
 
-  instances.set(instanceId, { id: instanceId, name, nodeId, manager, color });
+  instances.set(instanceId, { id: instanceId, name, nodeId, manager, color, transportMode });
   appendLog(name, color, 'instance created', shortId(nodeId));
   renderInstances();
 }
@@ -404,23 +433,59 @@ async function connectFromSharedUri() {
     return;
   }
 
-  const responder = instanceByNodeId(info.nodeId);
-  if (!responder) {
+  const localResponder = instanceByNodeId(info.nodeId);
+
+  // In bus mode the responder must be a local instance.
+  if (!localResponder && transportMode !== 'webrtc') {
     appendLog('system', '#f85149', 'shared target not found in simulation', shortId(info.nodeId));
     return;
   }
 
-  const candidates = [...instances.values()].filter(i => i.id !== responder.id);
-  const initiator = candidates[0];
-  if (!initiator) {
-    appendLog('system', '#d29922', 'need at least two instances');
-    return;
-  }
+  if (localResponder) {
+    // Target is local — use the select-based openChannel flow.
+    const candidates = [...instances.values()].filter(i => i.id !== localResponder.id);
+    const initiator = candidates[0];
+    if (!initiator) {
+      appendLog('system', '#d29922', 'need at least two instances');
+      return;
+    }
 
-  $('#sel-initiator').value = initiator.id;
-  $('#sel-responder').value = responder.id;
-  appendLog('system', '#58a6ff', 'connecting from shared info', `${initiator.name} → ${responder.name}`);
-  await openChannel();
+    $('#sel-initiator').value = initiator.id;
+    $('#sel-responder').value = localResponder.id;
+    appendLog('system', '#58a6ff', 'connecting from shared info', `${initiator.name} → ${localResponder.name}`);
+    await openChannel();
+  } else {
+    // WebRTC mode — connect directly to a remote peer in another tab/device.
+    const webrtcCandidates = [...instances.values()].filter(i => i.transportMode === 'webrtc');
+    const initiator = webrtcCandidates[0];
+    if (!initiator) {
+      appendLog('system', '#d29922', 'no WebRTC instance available — create one first');
+      return;
+    }
+
+    const targetName = info.displayName ?? shortId(info.nodeId);
+    appendLog('system', '#58a6ff', 'connecting via WebRTC to remote peer', `${initiator.name} → ${targetName}`);
+
+    try {
+      const sessionId = await initiator.manager.openChannel(info.nodeId);
+      // openChannel() resolves only after the full mutual-auth handshake completes
+      // (AUTH_CONFIRM received), so the channel is READY by this point.
+      // onChannelReady already fired during the handshake; the guard below is defensive.
+      if (!channels.has(sessionId)) {
+        channels.set(sessionId, {
+          sessionId,
+          peerIds:     [initiator.id, null],
+          peerNodeIds: [initiator.nodeId, info.nodeId],
+          status:      ChannelStatus.READY,
+          messages:    [],
+        });
+      }
+      appendLog(initiator.name, initiator.color, 'handshake complete', shortId(sessionId));
+      renderChannels();
+    } catch (err) {
+      appendLog(initiator.name, '#f85149', 'channel failed', err.message);
+    }
+  }
 }
 
 async function nfcWriteShareUri() {
@@ -494,6 +559,24 @@ bindAsyncClick('#btn-connect-from-share', connectFromSharedUri, 'connect failed'
 bindAsyncClick('#btn-nfc-write', nfcWriteShareUri, 'NFC write failed');
 bindAsyncClick('#btn-nfc-read', nfcReadAndConnect, 'NFC read failed');
 $('#share-uri').addEventListener('keydown', e => { if (e.key === 'Enter') connectFromSharedUri(); });
+
+// ── Transport mode controls ───────────────────────────────────────────────────
+$$('[name="transport-mode"]').forEach(radio => radio.addEventListener('change', () => {
+  transportMode = radio.value;
+  const cfg = $('#webrtc-cfg');
+  if (cfg) cfg.hidden = transportMode !== 'webrtc';
+  if (transportMode === 'webrtc') {
+    const roomIdInp = $('#inp-room-id');
+    if (roomIdInp && !roomIdInp.value.trim()) {
+      roomIdInp.value = crypto.randomUUID().slice(0, 8);
+    }
+  }
+}));
+
+$('#btn-gen-room-id').addEventListener('click', () => {
+  const inp = $('#inp-room-id');
+  if (inp) inp.value = crypto.randomUUID().slice(0, 8);
+});
 
 // Auto-create two instances so the UI isn't empty on load
 createInstance().then(() => createInstance());
