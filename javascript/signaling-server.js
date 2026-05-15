@@ -2,13 +2,27 @@
 
 const http = require('node:http');
 const { EventEmitter } = require('node:events');
-const { normalizeTimeoutMs, DEFAULT_POLL_TIMEOUT_MS } = require('./webrtc-p2p');
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_MAX_BODY_BYTES = 16 * 1024;
 const DEFAULT_CORS_ALLOWED_ORIGINS = ['*'];
 const DEFAULT_MAX_POLL_LISTENERS = 256;
+const MIN_POLL_LISTENERS = 16;
+const DEFAULT_POLL_TIMEOUT_MS = 20_000;
+const MIN_POLL_TIMEOUT_MS = 1_000;
+const MAX_POLL_TIMEOUT_MS = 120_000;
+
+function normalizeTimeoutMs(value, fallbackMs = DEFAULT_POLL_TIMEOUT_MS) {
+  const parsed = Number(value);
+  const timeoutMs = Number.isFinite(parsed) ? parsed : fallbackMs;
+  return Math.max(MIN_POLL_TIMEOUT_MS, Math.min(timeoutMs, MAX_POLL_TIMEOUT_MS));
+}
+
+function toFiniteNumberOrDefault(value, defaultValue) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+}
 
 function parseJsonBody(req, maxBodyBytes) {
   return new Promise((resolve, reject) => {
@@ -111,10 +125,12 @@ function createSignalingServer({
 } = {}) {
   const queuesByRoom = new Map(); // roomId => Map<targetNodeId, signal[]>
   const queueEvents = new EventEmitter();
-  queueEvents.setMaxListeners(Math.max(16, Number(maxPollListeners) || DEFAULT_MAX_POLL_LISTENERS));
+  queueEvents.setMaxListeners(
+    Math.max(MIN_POLL_LISTENERS, toFiniteNumberOrDefault(maxPollListeners, DEFAULT_MAX_POLL_LISTENERS))
+  );
 
   const effectivePollTimeoutMs = normalizeTimeoutMs(pollTimeoutMs);
-  const effectiveMaxBodyBytes = Math.max(1, Number(maxBodyBytes) || DEFAULT_MAX_BODY_BYTES);
+  const effectiveMaxBodyBytes = Math.max(1, toFiniteNumberOrDefault(maxBodyBytes, DEFAULT_MAX_BODY_BYTES));
   const effectiveCorsAllowedOrigins = Array.isArray(corsAllowedOrigins) && corsAllowedOrigins.length > 0
     ? corsAllowedOrigins
     : DEFAULT_CORS_ALLOWED_ORIGINS;

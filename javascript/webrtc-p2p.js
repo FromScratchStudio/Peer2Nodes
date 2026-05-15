@@ -329,10 +329,6 @@ class WebRTCPeerTransport {
 
 module.exports = {
   HttpPollingSignaling,
-  MAX_POLL_TIMEOUT_MS,
-  MIN_POLL_TIMEOUT_MS,
-  DEFAULT_POLL_TIMEOUT_MS,
-  normalizeTimeoutMs,
   SignalType,
   WebRTCPeerTransport
 };

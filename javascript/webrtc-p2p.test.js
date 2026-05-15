@@ -29,7 +29,7 @@ async function test(name, fn) {
 }
 
 (async () => {
-  console.log('WebRTCP2P');
+  console.log('WebRTC P2P');
 
   await test('HttpPollingSignaling start is idempotent and stop aborts poll loop', async () => {
     let pollCalls = 0;
@@ -44,7 +44,7 @@ async function test(name, fn) {
           error.name = 'AbortError';
           reject(error);
         }, { once: true });
-        setTimeout(() => resolve(jsonResponse({ signals: [] })), 5_000);
+        setTimeout(() => resolve(jsonResponse({ signals: [] })), 200);
       });
     };
 
