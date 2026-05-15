@@ -129,6 +129,65 @@
     .inst-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .inst-name { flex: 1; font-size: 12px; }
     .inst-id { font-size: 10px; color: var(--muted); }
+    .inst-transport {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 8px;
+      background: rgba(139,148,158,.15);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .inst-transport.inst-wrt {
+      background: rgba(88,166,255,.12);
+      color: var(--accent);
+      border-color: rgba(88,166,255,.3);
+    }
+
+    /* ── Transport config ── */
+    .transport-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .tbar-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+    .tmode-opt {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      color: var(--text);
+    }
+    .tmode-opt input[type="radio"] { cursor: pointer; accent-color: var(--accent); }
+    .webrtc-cfg {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .webrtc-cfg input { width: 100%; }
+    .webrtc-room-row { display: flex; gap: 6px; }
+    .webrtc-room-row input { flex: 1; min-width: 0; }
+    .webrtc-hint { font-size: 10px; color: var(--muted); line-height: 1.5; }
+    .webrtc-hint code {
+      background: var(--surface2);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-family: var(--font);
+    }
 
     /* ── Channels panel ── */
     #channels-panel {
@@ -432,6 +491,8 @@
       .btn-close-ch { min-height: unset; padding: 6px 8px; }
       /* Log clear button stays compact */
       .log-header button { min-height: unset; padding: 4px 10px; font-size: 11px; }
+      /* Transport config Gen button stays compact */
+      #btn-gen-room-id { min-height: unset; padding: 6px 10px; }
 
       .panel-title { padding: 10px 14px; font-size: 11px; }
 
@@ -543,6 +604,27 @@
       <!-- Instances panel -->
       <section id="instances-panel" role="tabpanel" aria-labelledby="tab-instances">
         <div class="panel-title">INSTANCES</div>
+        <div class="transport-bar">
+          <span class="tbar-label">TRANSPORT</span>
+          <label class="tmode-opt">
+            <input type="radio" name="transport-mode" value="bus" id="tmode-bus" checked>
+            <span>Simulated</span>
+          </label>
+          <label class="tmode-opt">
+            <input type="radio" name="transport-mode" value="webrtc" id="tmode-webrtc">
+            <span>WebRTC</span>
+          </label>
+        </div>
+        <div id="webrtc-cfg" class="webrtc-cfg" hidden>
+          <input id="inp-signaling-url" type="url" placeholder="Signaling server URL" value="http://localhost:8787" />
+          <div class="webrtc-room-row">
+            <input id="inp-room-id" type="text" placeholder="Room ID" />
+            <button id="btn-gen-room-id" title="Generate random room ID">Gen</button>
+          </div>
+          <div class="webrtc-hint">
+            Start relay: <code>npm run start:signaling</code> in <code>javascript/</code>
+          </div>
+        </div>
         <div class="create-row">
           <input id="inp-name" type="text" placeholder="Instance name…" />
           <button id="btn-create" class="primary">+ New</button>
