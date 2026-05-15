@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Peer2Nodes Simulation</title>
+  <style>
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2128;
+      --border:    #30363d;
+      --text:      #c9d1d9;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --green:     #3fb950;
+      --yellow:    #d29922;
+      --red:       #f85149;
+      --font:      'Courier New', Consolas, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    @supports (height: 100dvh) {
+      body { height: 100dvh; }
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    header .logo { font-size: 15px; letter-spacing: 3px; color: var(--accent); font-weight: bold; }
+    header .subtitle { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+
+    /* ── Mobile tab nav (hidden on desktop) ── */
+    .mobile-tabs {
+      display: none;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .mobile-tab {
+      flex: 1;
+      padding: 10px 6px;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      cursor: pointer;
+      font-family: var(--font);
+      white-space: nowrap;
+    }
+    .mobile-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .mobile-tab:hover:not(.active) { color: var(--text); }
+
+    /* ── Content area (wraps .main + #log-panel) ── */
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── Main split ── */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── Instances panel ── */
+    #instances-panel {
+      width: 220px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+    }
+
+    .panel-title {
+      padding: 8px 14px;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    .create-row {
+      display: flex;
+      gap: 6px;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .create-row input { flex: 1; min-width: 0; }
+
+    #instances-list { flex: 1; overflow-y: auto; }
+
+    .inst-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .inst-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .inst-name { flex: 1; font-size: 12px; }
+    .inst-id { font-size: 10px; color: var(--muted); }
+
+    /* ── Channels panel ── */
+    #channels-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .channels-top {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .connect-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .connect-bar .arrow { color: var(--muted); }
+
+    .share-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .share-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .share-uri-wrap {
+      display: flex;
+      gap: 6px;
+      width: 100%;
+    }
+    #share-uri {
+      flex: 1;
+      min-width: 0;
+    }
+    #qr-preview {
+      width: 160px;
+      height: 160px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      object-fit: contain;
+      background: #fff;
+      align-self: flex-start;
+    }
+    .share-help {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    #channels-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+    .ch-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .ch-body {
+      display: flex;
+      flex-direction: column;
+    }
+    .ch-card.ch-collapsed .ch-body { display: none; }
+
+    .ch-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .ch-peers { flex: 1; font-size: 13px; }
+    .ch-arrow { color: var(--muted); }
+
+    .ch-badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      letter-spacing: 0.5px;
+    }
+    .st-ready { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+    .st-auth  { background: rgba(210,169,34,.15); color: var(--yellow); border: 1px solid rgba(210,169,34,.3); }
+    .st-error { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid rgba(248,81,73,.3); }
+    .st-other { background: rgba(139,148,158,.15); color: var(--muted); border: 1px solid var(--border); }
+
+    .btn-close-ch {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px 4px;
+      line-height: 1;
+    }
+    .btn-close-ch:hover { color: var(--red); }
+    .btn-toggle-ch {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 6px;
+      line-height: 1;
+    }
+    .btn-toggle-ch:hover { color: var(--accent); }
+
+    /* Message history */
+    .msg-history {
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 160px;
+      overflow-y: auto;
+      border-bottom: 1px solid var(--border);
+    }
+    .msg-row { display: flex; gap: 6px; align-items: baseline; font-size: 12px; }
+    .msg-who { font-weight: bold; flex-shrink: 0; }
+    .msg-text { flex: 1; color: var(--text); word-break: break-word; }
+    .msg-ack { font-size: 10px; color: var(--green); }
+
+    /* Compose row */
+    .ch-compose {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      align-items: center;
+    }
+    .ch-compose .msg-input { flex: 1; min-width: 0; }
+
+    /* Empty state */
+    .empty-hint {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    /* ── Log panel ── */
+    #log-panel {
+      height: 200px;
+      flex-shrink: 0;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .log-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .log-header:hover { color: var(--text); }
+    .log-toggle { margin-left: auto; color: var(--muted); font-size: 12px; }
+    .log-header button { margin-left: 8px; padding: 2px 8px; font-size: 10px; cursor: pointer; }
+    #log-panel.log-collapsed { height: auto; }
+    #log-panel.log-collapsed #log { display: none; }
+    #log-panel.log-collapsed .log-toggle { transform: rotate(180deg); }
+
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 14px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .log-row { display: flex; gap: 8px; }
+    .lt { color: var(--muted); flex-shrink: 0; }
+    .li { font-weight: bold; flex-shrink: 0; }
+    .le { color: var(--text); }
+    .ld { color: var(--muted); }
+
+    /* ── Form controls ── */
+    input, select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 8px;
+      font-family: var(--font);
+      font-size: 12px;
+      border-radius: 4px;
+      outline: none;
+    }
+    input::placeholder { color: var(--muted); }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 12px;
+      font-family: var(--font);
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button:hover { border-color: var(--accent); color: var(--accent); }
+    button.primary { border-color: var(--accent); color: var(--accent); }
+    button.primary:hover { background: rgba(88,166,255,.1); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ── Tablet (≤ 1024px) ── */
+    @media (max-width: 1024px) {
+      #instances-panel { width: 190px; }
+      #log-panel { height: 180px; }
+      button { padding: 5px 10px; }
+    }
+
+    /* ── Mobile (≤ 640px) ── */
+    @media (max-width: 640px) {
+      body { font-size: 14px; }
+
+      header { padding: 10px 14px; }
+      header .logo { font-size: 14px; letter-spacing: 2px; }
+      header .subtitle { font-size: 10px; }
+
+      /* Show tab nav */
+      .mobile-tabs { display: flex; }
+
+      /* content-area becomes the positioning root for panels */
+      .content-area { position: relative; }
+
+      /* .main fills the content-area absolutely */
+      .main {
+        position: absolute;
+        inset: 0;
+      }
+      .main.hidden-mobile { display: none; }
+
+      /* Each panel overlays the full .main */
+      #instances-panel {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        border-right: none;
+      }
+      #channels-panel {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      /* Hide inactive panels; JS adds .tab-active to show */
+      #instances-panel:not(.tab-active),
+      #channels-panel:not(.tab-active) { display: none; }
+
+      /* Log panel overlays content-area when tab active */
+      #log-panel {
+        position: absolute;
+        inset: 0;
+        height: 100%;
+        border-top: none;
+        display: none;
+        z-index: 10;
+      }
+      #log-panel.tab-active { display: flex; }
+
+      /* Larger touch targets */
+      button {
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 13px;
+      }
+      input, select {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      /* Close-channel button stays compact */
+      .btn-close-ch { min-height: unset; padding: 6px 8px; }
+      /* Log clear button stays compact */
+      .log-header button { min-height: unset; padding: 4px 10px; font-size: 11px; }
+
+      .panel-title { padding: 10px 14px; font-size: 11px; }
+
+      /* Create row */
+      .create-row { padding: 10px 12px; gap: 8px; }
+
+      /* Instance cards */
+      .inst-card { padding: 10px 14px; gap: 10px; }
+      .inst-name { font-size: 14px; }
+      .inst-dot { width: 10px; height: 10px; }
+      .inst-id { font-size: 11px; }
+
+      /* Connect bar: vertical */
+      .connect-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+      .connect-bar .arrow { display: none; }
+      .connect-bar select,
+      .connect-bar button { width: 100%; }
+
+      /* Share bar */
+      .share-bar { padding: 10px 12px; gap: 10px; }
+
+      /* Keep top controls scrollable independently from channels list */
+      .channels-top {
+        max-height: 48%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
+      /* Share row: 2-column button grid */
+      .share-row { gap: 8px; }
+      .share-row > span { width: 100%; }
+      .share-row > select { width: 100%; }
+      .share-row > button {
+        flex: 1 1 calc(50% - 4px);
+        min-width: calc(50% - 4px);
+      }
+
+      /* URI wrap: stack vertically */
+      .share-uri-wrap { flex-direction: column; gap: 8px; }
+      .share-uri-wrap button { width: 100%; }
+
+      /* QR preview: responsive */
+      #qr-preview {
+        width: 120px;
+        height: 120px;
+        align-self: center;
+      }
+
+      /* Channel cards */
+      .ch-header { padding: 10px 12px; }
+      .ch-peers { font-size: 14px; }
+      .ch-badge { font-size: 11px; padding: 3px 8px; }
+      .btn-toggle-ch { padding: 6px 8px; font-size: 12px; }
+
+      /* Message history */
+      .msg-history { max-height: 180px; padding: 10px 12px; }
+      .msg-row { font-size: 13px; gap: 8px; }
+
+      /* Compose: sender select full-width, input + send in a row */
+      .ch-compose { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+      .ch-compose select { flex-basis: 100%; width: 100%; min-height: 44px; }
+      .ch-compose .msg-input { flex: 1; min-width: 0; min-height: 44px; }
+      .ch-compose .btn-send { flex-shrink: 0; min-width: 80px; }
+
+      /* Log */
+      .log-header { padding: 10px 14px; font-size: 11px; }
+      #log { padding: 6px 14px; font-size: 13px; line-height: 1.7; }
+
+      /* Channels list stays visible at bottom and scrollable */
+      #channels-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 10px;
+      }
+
+      /* Empty hint */
+      .empty-hint { font-size: 13px; padding: 30px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="logo">PEER2NODES</span>
+    <span class="subtitle">SIMULATION</span>
+  </header>
+
+  <!-- Tab nav – visible on mobile only -->
+  <nav class="mobile-tabs" role="tablist" aria-label="Panel navigation">
+    <button id="tab-instances" class="mobile-tab" data-panel="instances-panel" role="tab"
+            aria-selected="false" aria-controls="instances-panel" tabindex="-1">NODES</button>
+    <button id="tab-channels" class="mobile-tab active" data-panel="channels-panel" role="tab"
+            aria-selected="true" aria-controls="channels-panel" tabindex="0">CHANNELS</button>
+    <button id="tab-log" class="mobile-tab" data-panel="log-panel" role="tab"
+            aria-selected="false" aria-controls="log-panel" tabindex="-1">LOG</button>
+  </nav>
+
+  <div class="content-area">
+
+    <div class="main">
+
+      <!-- Instances panel -->
+      <section id="instances-panel" role="tabpanel" aria-labelledby="tab-instances">
+        <div class="panel-title">INSTANCES</div>
+        <div class="create-row">
+          <input id="inp-name" type="text" placeholder="Instance name…" />
+          <button id="btn-create" class="primary">+ New</button>
+        </div>
+        <div id="instances-list"></div>
+      </section>
+
+      <!-- Channels panel -->
+      <section id="channels-panel" class="tab-active" role="tabpanel" aria-labelledby="tab-channels">
+        <div class="channels-top">
+          <div class="connect-bar">
+            <span style="color:var(--muted);font-size:10px;letter-spacing:1px">CONNECT</span>
+            <select id="sel-initiator" class="inst-select"></select>
+            <span class="arrow">→</span>
+            <select id="sel-responder" class="inst-select"></select>
+            <button id="btn-open-channel" class="primary">Open Channel</button>
+          </div>
+          <div class="share-bar">
+            <div class="share-row">
+              <span style="color:var(--muted);font-size:10px;letter-spacing:1px">SHARE CONNECTION INFO</span>
+              <select id="sel-share-instance" class="inst-select"></select>
+              <button id="btn-generate-share" class="primary">Generate NFC + QR</button>
+              <button id="btn-copy-share">Copy</button>
+              <button id="btn-render-remote-qr">Render QR (remote)</button>
+              <button id="btn-share-native">Native Share</button>
+              <button id="btn-nfc-write">NFC Write</button>
+              <button id="btn-nfc-read">NFC Read</button>
+            </div>
+            <div class="share-uri-wrap">
+              <input id="share-uri" type="text" placeholder="Generated peer2nodes://connect URI…" />
+              <button id="btn-connect-from-share">Connect from Shared URI</button>
+            </div>
+            <img id="qr-preview" alt="No QR code generated" />
+            <div class="share-help">On mobile Chrome (HTTPS), NFC read/write uses Web NFC. QR render is opt-in and uses api.qrserver.com.</div>
+          </div>
+        </div>
+        <div id="channels-list">
+          <div class="empty-hint">Create instances above, then open a channel between two of them.</div>
+        </div>
+      </section>
+
+    </div><!-- /.main -->
+
+    <!-- Event log -->
+    <section id="log-panel" role="tabpanel" aria-labelledby="tab-log">
+      <div class="log-header" id="log-header-toggle" title="Toggle log">
+        EVENT LOG
+        <span class="log-toggle" aria-hidden="true">▲</span>
+        <button id="btn-clear-log">Clear</button>
+      </div>
+      <div id="log"></div>
+    </section>
+
+  </div><!-- /.content-area -->
+
+  <script type="module" src="./app.js"></script>
+
+  <script>
+    /* ── Mobile tab navigation ── */
+    (function () {
+      var tabs        = document.querySelectorAll('.mobile-tab');
+      var tabArray    = Array.from(tabs);
+      var mainEl      = document.querySelector('.main');
+      var logPanel    = document.getElementById('log-panel');
+      var instPanel   = document.getElementById('instances-panel');
+      var chPanel     = document.getElementById('channels-panel');
+      var mq          = window.matchMedia('(max-width: 640px)');
+
+      function isMobile() { return mq.matches; }
+
+      function activateTab(panelId) {
+        tabs.forEach(function (t) {
+          var active = t.dataset.panel === panelId;
+          t.classList.toggle('active', active);
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
+          t.setAttribute('tabindex', active ? '0' : '-1');
+        });
+
+        if (panelId === 'log-panel') {
+          mainEl.classList.add('hidden-mobile');
+          logPanel.classList.add('tab-active');
+          instPanel.classList.remove('tab-active');
+          chPanel.classList.remove('tab-active');
+        } else {
+          mainEl.classList.remove('hidden-mobile');
+          logPanel.classList.remove('tab-active');
+          instPanel.classList.toggle('tab-active', panelId === 'instances-panel');
+          chPanel.classList.toggle('tab-active',   panelId === 'channels-panel');
+        }
+      }
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          if (isMobile()) activateTab(tab.dataset.panel);
+        });
+
+        /* Arrow-key navigation between tabs (ARIA tablist pattern) */
+        tab.addEventListener('keydown', function (e) {
+          if (!isMobile()) return;
+          var idx = tabArray.indexOf(e.currentTarget);
+          var next = -1;
+          if (e.key === 'ArrowRight') next = (idx + 1) % tabArray.length;
+          if (e.key === 'ArrowLeft')  next = (idx - 1 + tabArray.length) % tabArray.length;
+          if (next !== -1) {
+            e.preventDefault();
+            activateTab(tabArray[next].dataset.panel);
+            tabArray[next].focus();
+          }
+        });
+      });
+
+      function resetDesktop() {
+        mainEl.classList.remove('hidden-mobile');
+        logPanel.classList.remove('tab-active');
+        instPanel.classList.remove('tab-active');
+        chPanel.classList.remove('tab-active');
+      }
+
+      function initLayout() {
+        if (isMobile()) {
+          /* Honour initial HTML state (channels-panel has tab-active) */
+          var activeTab = tabArray.find(function (t) { return t.classList.contains('active'); });
+          activateTab(activeTab ? activeTab.dataset.panel : 'channels-panel');
+        } else {
+          resetDesktop();
+        }
+      }
+
+      var resizeTimer;
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(initLayout, 150);
+      });
+
+      initLayout();
+    }());
+
+    /* ── Collapsible log panel ── */
+    (function () {
+      var toggle   = document.getElementById('log-header-toggle');
+      var panel    = document.getElementById('log-panel');
+      var clearBtn = document.getElementById('btn-clear-log');
+
+      toggle.addEventListener('click', function () {
+        panel.classList.toggle('log-collapsed');
+      });
+
+      /* Prevent the Clear button click from also toggling the panel */
+      clearBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+    }());
+  </script>
+</body>
+</html>
