@@ -177,7 +177,6 @@ async function createInstance() {
 
   const color      = COLORS[(instances.size) % COLORS.length];
   const nodeId     = crypto.randomUUID();
-  const instanceId = crypto.randomUUID();
 
   let transport;
   if (transportMode === 'webrtc') {
@@ -197,6 +196,7 @@ async function createInstance() {
   }
 
   const cryptoSvc  = await PeerCryptoService.create();
+  const instanceId = crypto.randomUUID();
   const client     = new PeerNodeClient({ nodeId, capabilities: [Capability.END_TO_END_ENCRYPTION], transport });
   const manager    = new PeerChannelManager({ client, cryptoService: cryptoSvc });
 
@@ -468,6 +468,9 @@ async function connectFromSharedUri() {
 
     try {
       const sessionId = await initiator.manager.openChannel(info.nodeId);
+      // openChannel() resolves only after the full mutual-auth handshake completes
+      // (AUTH_CONFIRM received), so the channel is READY by this point.
+      // onChannelReady already fired during the handshake; the guard below is defensive.
       if (!channels.has(sessionId)) {
         channels.set(sessionId, {
           sessionId,

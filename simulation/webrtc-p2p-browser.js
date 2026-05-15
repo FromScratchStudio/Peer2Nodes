@@ -169,7 +169,9 @@ class WebRTCPeerTransport {
     this.#nodeId = nodeId;
     this.#signaling = signaling;
     this.#rtcConfig = rtcConfig;
-    this.#connectionTimeoutMs = connectionTimeoutMs > 0 ? connectionTimeoutMs : DEFAULT_CONNECTION_TIMEOUT_MS;
+    this.#connectionTimeoutMs = Number.isFinite(connectionTimeoutMs) && connectionTimeoutMs > 0
+      ? connectionTimeoutMs
+      : DEFAULT_CONNECTION_TIMEOUT_MS;
   }
 
   setMessageHandler(handler) {
@@ -261,7 +263,8 @@ class WebRTCPeerTransport {
       state.timeoutId = setTimeout(() => {
         this.#peerStates.delete(remoteNodeId);
         pc.close();
-        reject(new Error(`WebRTC connection to ${remoteNodeId.slice(0, 8)} timed out`));
+        const shortRemote = remoteNodeId.length > 8 ? `${remoteNodeId.slice(0, 8)}…` : remoteNodeId;
+        reject(new Error(`WebRTC connection to ${shortRemote} timed out`));
       }, this.#connectionTimeoutMs);
       innerPromise.then(() => {
         clearTimeout(state.timeoutId);
