@@ -115,7 +115,12 @@ public final class WebRTCPeerTransport: PeerTransport {
         try signaling.start { [weak self] signal in
             self?.handleIncomingSignal(signal)
         }
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            signaling.stop()
+            throw error
+        }
     }
 
     public func stop() {
@@ -141,7 +146,6 @@ public final class WebRTCPeerTransport: PeerTransport {
 
     private func ensureOfferSentIfNeeded(to remoteNodeId: String, sessionId: String) throws {
         if announcedPeers.contains(remoteNodeId) { return }
-        announcedPeers.insert(remoteNodeId)
         let offerSdp = try engine.createOffer(for: remoteNodeId)
         try signaling.send(
             WebRTCSignal(
@@ -152,6 +156,7 @@ public final class WebRTCPeerTransport: PeerTransport {
                 sdp: offerSdp
             )
         )
+        announcedPeers.insert(remoteNodeId)
     }
 
     private func handleIncomingSignal(_ signal: WebRTCSignal) {

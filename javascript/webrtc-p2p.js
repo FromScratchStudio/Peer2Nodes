@@ -6,6 +6,11 @@ const SignalType = Object.freeze({
   CANDIDATE: 'candidate'
 });
 
+const DEFAULT_POLL_TIMEOUT_MS = 20_000;
+const MIN_POLL_TIMEOUT_MS = 1_000;
+const MAX_POLL_TIMEOUT_MS = 120_000;
+const SLASH_CHAR_CODE = 47;
+
 function assertFunction(value, name) {
   if (typeof value !== 'function') {
     throw new Error(`${name} must be a function`);
@@ -20,8 +25,18 @@ function getFetch(fetchImpl) {
 
 function trimTrailingSlashes(value) {
   let end = value.length;
-  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1; // '/'
+  while (end > 0 && value.charCodeAt(end - 1) === SLASH_CHAR_CODE) end -= 1;
   return value.slice(0, end);
+}
+
+function normalizeTimeoutMs(value, fallbackMs = DEFAULT_POLL_TIMEOUT_MS) {
+  const parsed = Number(value);
+  const timeoutMs = Number.isFinite(parsed) ? parsed : fallbackMs;
+  return Math.max(MIN_POLL_TIMEOUT_MS, Math.min(timeoutMs, MAX_POLL_TIMEOUT_MS));
+}
+
+function isAbortError(error) {
+  return error?.name === 'AbortError';
 }
 
 class HttpPollingSignaling {
@@ -33,12 +48,14 @@ class HttpPollingSignaling {
   #stopped = true;
   #onSignal = null;
   #onError = null;
+  #pollPromise = null;
+  #pollAbortController = null;
 
   constructor({
     baseUrl,
     roomId,
     nodeId,
-    pollTimeoutMs = 20_000,
+    pollTimeoutMs = DEFAULT_POLL_TIMEOUT_MS,
     onError = null,
     fetchImpl
   }) {
@@ -48,22 +65,31 @@ class HttpPollingSignaling {
     this.#baseUrl = trimTrailingSlashes(baseUrl);
     this.#roomId = roomId;
     this.#nodeId = nodeId;
-    this.#pollTimeoutMs = Math.max(1_000, Math.min(Number(pollTimeoutMs) || 20_000, 120_000));
+    this.#pollTimeoutMs = normalizeTimeoutMs(pollTimeoutMs);
     this.#onError = typeof onError === 'function' ? onError : null;
     this.#fetch = getFetch(fetchImpl);
   }
 
   async start(onSignal) {
     assertFunction(onSignal, 'onSignal');
+    if (this.#pollPromise) return;
     this.#onSignal = onSignal;
     this.#stopped = false;
-    this.#pollLoop().catch((error) => {
-      this.#onError?.(error);
-    });
+    this.#pollPromise = this.#pollLoop()
+      .catch((error) => {
+        this.#onError?.(error);
+      })
+      .finally(() => {
+        this.#pollPromise = null;
+        this.#pollAbortController = null;
+        this.#stopped = true;
+      });
   }
 
   async stop() {
     this.#stopped = true;
+    this.#pollAbortController?.abort();
+    await this.#pollPromise;
   }
 
   async sendSignal(signal) {
@@ -90,19 +116,24 @@ class HttpPollingSignaling {
 
   async #pollLoop() {
     while (!this.#stopped) {
+      this.#pollAbortController = new AbortController();
       try {
         const query = new URLSearchParams({
           roomId: this.#roomId,
           nodeId: this.#nodeId,
           timeoutMs: String(this.#pollTimeoutMs)
         });
-        const response = await this.#request(`/signals/poll?${query.toString()}`, { method: 'GET' });
+        const response = await this.#request(`/signals/poll?${query.toString()}`, {
+          method: 'GET',
+          signal: this.#pollAbortController.signal
+        });
         const signals = Array.isArray(response?.signals) ? response.signals : [];
         for (const signal of signals) {
           if (this.#stopped) break;
           await this.#onSignal?.(signal);
         }
       } catch (error) {
+        if (this.#stopped && isAbortError(error)) break;
         this.#onError?.(error);
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
@@ -298,6 +329,10 @@ class WebRTCPeerTransport {
 
 module.exports = {
   HttpPollingSignaling,
+  MAX_POLL_TIMEOUT_MS,
+  MIN_POLL_TIMEOUT_MS,
+  DEFAULT_POLL_TIMEOUT_MS,
+  normalizeTimeoutMs,
   SignalType,
   WebRTCPeerTransport
 };

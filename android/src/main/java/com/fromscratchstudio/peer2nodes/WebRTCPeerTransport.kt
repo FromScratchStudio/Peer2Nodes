@@ -116,7 +116,6 @@ class WebRTCPeerTransport(
 
     private fun ensureOfferSentIfNeeded(remoteNodeId: String, sessionId: String) {
         if (announcedPeers.contains(remoteNodeId)) return
-        announcedPeers += remoteNodeId
         val offerSdp = engine.createOffer(remoteNodeId)
         signaling.send(
             WebRTCSignal(
@@ -127,6 +126,7 @@ class WebRTCPeerTransport(
                 sdp = offerSdp
             )
         )
+        announcedPeers += remoteNodeId
     }
 
     private fun handleIncomingSignal(signal: WebRTCSignal) {
