@@ -153,9 +153,91 @@ the `#log` panel at the bottom. Every significant event is logged:
 Each instance has a stable color (cycled from an 8-color palette) so log rows are
 visually attributable at a glance. The log auto-scrolls to the bottom on each append.
 
----
+## 5. WebRTC real transport
 
-## 3. Security scope
+### 5.1 Overview
+
+The simulation now supports a **WebRTC transport mode** alongside the existing simulated
+bus. When WebRTC mode is active, each instance created uses a real `RTCPeerConnection`
+and a `WebRTCPeerTransport` backed by an `HttpPollingSignaling` client. This enables
+two-device and cross-tab connections using the same `PeerChannelManager` protocol
+(HELLO, key exchange, mutual auth, AES-256-GCM messaging) over actual WebRTC data
+channels.
+
+### 5.2 New file: `webrtc-p2p-browser.js`
+
+A browser ES-module port of `javascript/webrtc-p2p.js`. Changes from the Node.js
+source:
+
+| Change | Reason |
+|---|---|
+| `module.exports` → `export {}` | ES module syntax required |
+| `'use strict'` kept | no-op in ES modules but harmless |
+| `connectionTimeoutMs` option (default 30 s) | avoids indefinitely-hung `send()` awaits if ICE fails |
+| `#connectionTimeoutMs` enforces timeout on `readyPromise` | peer state is cleaned up and promise rejects on timeout |
+
+The `HttpPollingSignaling` and `WebRTCPeerTransport` classes are otherwise identical
+to the Node.js version — both use browser globals (`fetch`, `RTCPeerConnection`,
+`AbortController`) which are natively available.
+
+### 5.3 Transport selection in app.js
+
+`transportMode` (`'bus'` | `'webrtc'`) is global state that applies to all
+subsequently created instances. An instance's transport type is frozen at creation
+time and stored on the instance metadata (`inst.transportMode`).
+
+**Bus mode (default):**
+```
+transport = new BusPeerTransport(bus, nodeId)
+```
+In-memory delivery; no network; same-tab only.
+
+**WebRTC mode:**
+```
+signaling = new HttpPollingSignaling({ baseUrl, roomId, nodeId, onError })
+transport = new WebRTCPeerTransport({ nodeId, signaling })
+```
+`onError` is wired to the event log so signaling failures surface immediately.
+
+### 5.4 Cross-tab / cross-device connection flow
+
+In WebRTC mode, two peers in different browser tabs or on different devices follow
+the share-URI pattern:
+
+```
+Device A                                 Device B
+─────────────────────────────────────────────────
+1. Create WebRTC instance (node-A)
+2. Generate Share URI
+3. Copy/NFC/QR share-URI to Device B
+                                     4. Create WebRTC instance (node-B)
+                                     5. Paste URI
+                                     6. Click "Connect from Shared URI"
+                                          → openChannel(node-A's nodeId)
+                                          → OFFER → signaling server → node-A
+                                          → ANSWER back → ICE negotiation
+                                          → data channel opens
+                                          → Peer2Nodes handshake completes
+                                          → READY channel appears on both devices
+```
+
+`connectFromSharedUri()` detects when the target nodeId is not a local instance and,
+in WebRTC mode, bypasses the local-select flow: it picks the first available local
+WebRTC instance as initiator and calls `manager.openChannel(remoteNodeId)` directly.
+
+### 5.5 Sender select in mixed-peer channels
+
+`renderChannels()` now filters the "Send as" dropdown to only include local instances.
+If one peer in a channel is remote (another tab/device), the remote peer's option is
+omitted — the remote side has its own UI to send from.
+
+### 5.6 Transport badge on instance cards
+
+Each instance card shows a badge:
+- `SIM` (grey) for bus-mode instances
+- `WRT` (blue) for WebRTC instances
+
+---
 
 The simulation is a **developer tool, not a production component**. Security properties
 are preserved from the real `PeerChannelManager` (mutual auth, AES-GCM encryption,
@@ -182,7 +264,7 @@ perfect forward secrecy) but the following points apply:
 
 ---
 
-## 5. File index
+## 6. File index
 
 | File | Description |
 |---|---|
@@ -190,6 +272,7 @@ perfect forward secrecy) but the following points apply:
 | `simulation/peer2nodes-browser.js` | `SimulationBus`, `BusPeerTransport`, `PeerNodeClient` (ES module) |
 | `simulation/peer-channel-browser.js` | `PeerCryptoService` (Web Crypto), `OutboundMessageQueue`, `PeerChannelManager` (ES module) |
 | `simulation/connection-info-share-browser.js` | Connection-info share encoding/decoding for URI, NFC payload, and QR payload |
+| `simulation/webrtc-p2p-browser.js` | `HttpPollingSignaling`, `WebRTCPeerTransport` — real WebRTC transport (ES module) |
 | `simulation/app.js` | Instance management, channel orchestration, message send/receive, event log |
 | `simulation/simulation-adr.md` | This document |
 | `simulation/simulation-readme.md` | Usage guide and run instructions |

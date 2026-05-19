@@ -4,7 +4,8 @@
   "description": "JavaScript implementation of the Peer2Nodes protocol",
   "main": "peer2nodes.js",
   "scripts": {
-    "test": "node connection-info-share.test.js && node peer-crypto-adapter.test.js && node peer-channel.test.js"
+    "test": "node connection-info-share.test.js && node peer-crypto-adapter.test.js && node signaling-server.test.js && node webrtc-p2p.test.js && node peer-channel.test.js",
+    "start:signaling": "node signaling-server.js"
   },
   "engines": {
     "node": ">=18.0.0"

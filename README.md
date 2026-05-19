@@ -45,6 +45,29 @@ Each runtime includes:
 - A loopback/in-memory transport implementation for integration and smoke testing
 - A connection-info sharing utility (`ConnectionInfoShare`) for URI/NFC/QR payload exchange
 
+## WebRTC peer-to-peer transport (Option B)
+
+The repository now includes cross-platform WebRTC transport building blocks:
+
+- JavaScript:
+  - `javascript/webrtc-p2p.js`
+  - `javascript/signaling-server.js`
+- iOS:
+  - `ios/Sources/Peer2Nodes/WebRTCPeerTransport.swift`
+- Android/Kotlin:
+  - `android/src/main/java/com/fromscratchstudio/peer2nodes/WebRTCPeerTransport.kt`
+
+For JavaScript signaling, run:
+
+```bash
+cd javascript
+npm run start:signaling
+```
+
+Detailed design and integration guidance are documented in:
+
+- `WebRTC-p2p-ADR.md`
+
 ## GitHub Pages previews
 
 - Every push to any branch publishes the simulation to GitHub Pages.
