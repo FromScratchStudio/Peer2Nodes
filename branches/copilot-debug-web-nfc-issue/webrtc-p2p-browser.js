@@ -150,6 +150,7 @@ class WebRTCPeerTransport {
   #signaling;
   #rtcConfig;
   #connectionTimeoutMs;
+  #onTransportError;
   #handler = null;
   #sessionTargets = new Map();
   #peerStates = new Map();
@@ -160,7 +161,8 @@ class WebRTCPeerTransport {
     nodeId,
     signaling,
     rtcConfig = undefined,
-    connectionTimeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS
+    connectionTimeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS,
+    onTransportError = null
   }) {
     if (!nodeId || typeof nodeId !== 'string') throw new Error('nodeId is required');
     if (!signaling || typeof signaling.start !== 'function' || typeof signaling.sendSignal !== 'function') {
@@ -172,6 +174,7 @@ class WebRTCPeerTransport {
     this.#connectionTimeoutMs = Number.isFinite(connectionTimeoutMs) && connectionTimeoutMs > 0
       ? connectionTimeoutMs
       : DEFAULT_CONNECTION_TIMEOUT_MS;
+    this.#onTransportError = typeof onTransportError === 'function' ? onTransportError : null;
   }
 
   setMessageHandler(handler) {
@@ -274,13 +277,14 @@ class WebRTCPeerTransport {
 
     this.#peerStates.set(remoteNodeId, state);
 
-    pc.onicecandidate = async (event) => {
+    // ICE candidate callback must NOT be async — unhandled rejections escape event callbacks.
+    pc.onicecandidate = (event) => {
       if (!event.candidate) return;
-      await this.#signaling.sendSignal({
+      this.#signaling.sendSignal({
         type: SignalType.CANDIDATE,
         targetNodeId: remoteNodeId,
         candidate: event.candidate
-      });
+      }).catch((error) => this.#onTransportError?.(error));
     };
 
     pc.ondatachannel = (event) => {
@@ -314,7 +318,8 @@ class WebRTCPeerTransport {
       }
     };
 
-    channel.onmessage = async (event) => {
+    // onmessage must NOT be async — unhandled rejections escape event callbacks.
+    channel.onmessage = (event) => {
       if (!this.#handler || typeof event?.data !== 'string') return;
       let envelope;
       try {
@@ -325,7 +330,7 @@ class WebRTCPeerTransport {
       if (envelope?.sessionId && envelope?.sourceNodeId) {
         this.#sessionTargets.set(envelope.sessionId, envelope.sourceNodeId);
       }
-      await this.#handler(envelope);
+      Promise.resolve(this.#handler(envelope)).catch((error) => this.#onTransportError?.(error));
     };
 
     channel.onclose = () => {
