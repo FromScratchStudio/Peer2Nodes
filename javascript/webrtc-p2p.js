@@ -9,6 +9,7 @@ const SignalType = Object.freeze({
 const DEFAULT_POLL_TIMEOUT_MS = 20_000;
 const MIN_POLL_TIMEOUT_MS = 1_000;
 const MAX_POLL_TIMEOUT_MS = 120_000;
+const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
 const SLASH_CHAR_CODE = 47;
 
 function assertFunction(value, name) {
@@ -162,6 +163,8 @@ class WebRTCPeerTransport {
   #nodeId;
   #signaling;
   #createPeerConnection;
+  #connectionTimeoutMs;
+  #onTransportError;
   #handler = null;
   #sessionTargets = new Map();
   #peerStates = new Map();
@@ -172,7 +175,9 @@ class WebRTCPeerTransport {
     nodeId,
     signaling,
     rtcConfig = undefined,
-    createPeerConnection
+    createPeerConnection,
+    connectionTimeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS,
+    onTransportError = null
   }) {
     if (!nodeId || typeof nodeId !== 'string') throw new Error('nodeId is required');
     if (!signaling || typeof signaling.start !== 'function' || typeof signaling.sendSignal !== 'function') {
@@ -181,6 +186,10 @@ class WebRTCPeerTransport {
     this.#nodeId = nodeId;
     this.#signaling = signaling;
     this.#createPeerConnection = createPeerConnection ?? createPeerConnectionFactory(rtcConfig);
+    this.#connectionTimeoutMs = Number.isFinite(connectionTimeoutMs) && connectionTimeoutMs > 0
+      ? connectionTimeoutMs
+      : DEFAULT_CONNECTION_TIMEOUT_MS;
+    this.#onTransportError = typeof onTransportError === 'function' ? onTransportError : null;
   }
 
   setMessageHandler(handler) {
@@ -195,6 +204,7 @@ class WebRTCPeerTransport {
 
   async stop() {
     for (const state of this.#peerStates.values()) {
+      clearTimeout(state.timeoutId);
       state.dataChannel?.close();
       state.pc.close();
     }
@@ -261,18 +271,36 @@ class WebRTCPeerTransport {
       ready: false,
       pendingMessages: [],
       readyPromise: null,
-      readyResolve: null
+      readyResolve: null,
+      timeoutId: null
     };
-    state.readyPromise = new Promise((resolve) => { state.readyResolve = resolve; });
+
+    // Race the channel-open against a connection timeout so callers never hang
+    // indefinitely when ICE fails or the remote peer never answers.
+    const innerPromise = new Promise((resolve) => { state.readyResolve = resolve; });
+    state.readyPromise = new Promise((resolve, reject) => {
+      state.timeoutId = setTimeout(() => {
+        this.#peerStates.delete(remoteNodeId);
+        pc.close();
+        const shortRemote = remoteNodeId.length > 8 ? `${remoteNodeId.slice(0, 8)}…` : remoteNodeId;
+        reject(new Error(`WebRTC connection to ${shortRemote} timed out`));
+      }, this.#connectionTimeoutMs);
+      innerPromise.then(() => {
+        clearTimeout(state.timeoutId);
+        resolve();
+      }).catch(reject);
+    });
+
     this.#peerStates.set(remoteNodeId, state);
 
-    pc.onicecandidate = async (event) => {
+    // ICE candidate callback must NOT be async — unhandled rejections escape event callbacks.
+    pc.onicecandidate = (event) => {
       if (!event.candidate) return;
-      await this.#signaling.sendSignal({
+      this.#signaling.sendSignal({
         type: SignalType.CANDIDATE,
         targetNodeId: remoteNodeId,
         candidate: event.candidate
-      });
+      }).catch((error) => this.#onTransportError?.(error));
     };
 
     pc.ondatachannel = (event) => {
@@ -299,6 +327,7 @@ class WebRTCPeerTransport {
 
     channel.onopen = () => {
       state.ready = true;
+      clearTimeout(state.timeoutId);
       state.readyResolve();
       while (state.pendingMessages.length) {
         const payload = state.pendingMessages.shift();
@@ -306,7 +335,8 @@ class WebRTCPeerTransport {
       }
     };
 
-    channel.onmessage = async (event) => {
+    // onmessage must NOT be async — unhandled rejections escape event callbacks.
+    channel.onmessage = (event) => {
       if (!this.#handler || typeof event?.data !== 'string') return;
       let envelope;
       try {
@@ -317,11 +347,12 @@ class WebRTCPeerTransport {
       if (envelope?.sessionId && envelope?.sourceNodeId) {
         this.#sessionTargets.set(envelope.sessionId, envelope.sourceNodeId);
       }
-      await this.#handler(envelope);
+      Promise.resolve(this.#handler(envelope)).catch((error) => this.#onTransportError?.(error));
     };
 
     channel.onclose = () => {
       state.ready = false;
+      clearTimeout(state.timeoutId);
       this.#peerStates.delete(remoteNodeId);
     };
   }

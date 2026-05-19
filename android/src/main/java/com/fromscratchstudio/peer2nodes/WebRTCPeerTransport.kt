@@ -42,6 +42,17 @@ interface WebRTCEngine {
     fun createAnswer(remoteNodeId: String, offerSdp: String): String
     fun applyAnswer(remoteNodeId: String, answerSdp: String)
     fun addIceCandidate(remoteNodeId: String, candidate: String)
+
+    /**
+     * Sends [payload] to [remoteNodeId] over the WebRTC data channel.
+     *
+     * **Buffering contract:** Implementations MUST buffer outbound data internally
+     * until the underlying data channel reaches the OPEN state, then drain the
+     * buffer. Throwing or silently dropping data before the channel is open is
+     * not permitted — [WebRTCPeerTransport.send] may be called before the channel
+     * is ready (e.g. for the initial HELLO frame) and relies on the engine to
+     * handle that case transparently.
+     */
     fun send(remoteNodeId: String, payload: ByteArray)
 }
 

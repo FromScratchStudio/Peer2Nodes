@@ -47,6 +47,15 @@ public protocol WebRTCEngine: AnyObject {
     func createAnswer(for remoteNodeId: String, offerSdp: String) throws -> String
     func applyAnswer(_ sdp: String, from remoteNodeId: String) throws
     func addIceCandidate(_ candidate: String, from remoteNodeId: String) throws
+
+    /// Sends `data` to `remoteNodeId` over the WebRTC data channel.
+    ///
+    /// **Buffering contract:** Implementations MUST buffer outbound data internally
+    /// until the underlying `RTCDataChannel` transitions to the `.open` state, then
+    /// drain the buffer.  Throwing or silently dropping data before the channel is
+    /// open is not permitted — `WebRTCPeerTransport.send(_:)` may be called before
+    /// the channel is ready (e.g. for the initial HELLO frame) and relies on the
+    /// engine to handle that case transparently.
     func send(_ data: Data, to remoteNodeId: String) throws
 }
 

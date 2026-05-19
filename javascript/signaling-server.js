@@ -26,24 +26,32 @@ function toFiniteNumberOrDefault(value, defaultValue) {
 
 function parseJsonBody(req, maxBodyBytes) {
   return new Promise((resolve, reject) => {
+    let done = false;
     let totalBytes = 0;
-    let tooLarge = false;
     const chunks = [];
+
+    function fail(error) {
+      if (done) return;
+      done = true;
+      // Destroy the socket immediately so oversized bodies are not fully read.
+      req.destroy();
+      reject(error);
+    }
+
     req.on('data', (chunk) => {
+      if (done) return;
       totalBytes += chunk.length;
       if (totalBytes > maxBodyBytes) {
-        tooLarge = true;
+        const error = new Error('payload_too_large');
+        error.statusCode = 413;
+        fail(error);
         return;
       }
       chunks.push(chunk);
     });
     req.on('end', () => {
-      if (tooLarge) {
-        const error = new Error('payload_too_large');
-        error.statusCode = 413;
-        reject(error);
-        return;
-      }
+      if (done) return;
+      done = true;
       try {
         const text = Buffer.concat(chunks).toString('utf8');
         resolve(text ? JSON.parse(text) : {});
@@ -53,7 +61,12 @@ function parseJsonBody(req, maxBodyBytes) {
         reject(parseError);
       }
     });
-    req.on('error', reject);
+    req.on('error', (error) => {
+      // Ignore errors triggered by our own req.destroy() call.
+      if (done) return;
+      done = true;
+      reject(error);
+    });
   });
 }
 
